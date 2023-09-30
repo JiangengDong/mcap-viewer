@@ -1,6 +1,6 @@
 {
-  "name": "egui Template PWA",
-  "short_name": "egui-template-pwa",
+  "name": "Mcap viewer PWA",
+  "short_name": "mcap-viewer-pwa",
   "icons": [
     {
       "src": "./icon-256.png",
