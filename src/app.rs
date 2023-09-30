@@ -1,7 +1,7 @@
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
-pub struct McapViewerApp {
+pub struct McapViewer {
     // Example stuff:
     label: String,
 
@@ -9,7 +9,7 @@ pub struct McapViewerApp {
     value: f32,
 }
 
-impl Default for McapViewerApp {
+impl Default for McapViewer {
     fn default() -> Self {
         Self {
             // Example stuff:
@@ -19,8 +19,9 @@ impl Default for McapViewerApp {
     }
 }
 
-impl McapViewerApp {
+impl McapViewer {
     /// Called once before the first frame.
+    #[must_use]
     pub fn new(cc: &eframe::CreationContext<'_>) -> Self {
         // This is also where you can customize the look and feel of egui using
         // `cc.egui_ctx.set_visuals` and `cc.egui_ctx.set_fonts`.
@@ -31,11 +32,11 @@ impl McapViewerApp {
             return eframe::get_value(storage, eframe::APP_KEY).unwrap_or_default();
         }
 
-        Default::default()
+        Self::default()
     }
 }
 
-impl eframe::App for McapViewerApp {
+impl eframe::App for McapViewer {
     /// Called by the frame work to save state before shutdown.
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         eframe::set_value(storage, eframe::APP_KEY, self);
@@ -48,18 +49,7 @@ impl eframe::App for McapViewerApp {
 
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             // The top panel is often a good place for a menu bar:
-
             egui::menu::bar(ui, |ui| {
-                #[cfg(not(target_arch = "wasm32"))] // no File->Quit on web pages!
-                {
-                    ui.menu_button("File", |ui| {
-                        if ui.button("Quit").clicked() {
-                            _frame.close();
-                        }
-                    });
-                    ui.add_space(16.0);
-                }
-
                 egui::widgets::global_dark_light_mode_buttons(ui);
             });
         });

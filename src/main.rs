@@ -14,7 +14,7 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "mcap viewer",
         native_options,
-        Box::new(|cc| Box::new(mcap_viewer::McapViewerApp::new(cc))),
+        Box::new(|cc| Box::new(mcap_viewer::McapViewer::new(cc))),
     )
 }
 
@@ -31,7 +31,7 @@ fn main() {
             .start(
                 "the_canvas_id", // hardcode it
                 web_options,
-                Box::new(|cc| Box::new(mcap_viewer::McapViewerApp::new(cc))),
+                Box::new(|cc| Box::new(mcap_viewer::McapViewer::new(cc))),
             )
             .await
             .expect("failed to start eframe");

@@ -1,4 +1,4 @@
-#![warn(clippy::all, rust_2018_idioms)]
+#![warn(clippy::all, clippy::pedantic, rust_2018_idioms)]
 
 mod app;
-pub use app::McapViewerApp;
+pub use app::McapViewer;
