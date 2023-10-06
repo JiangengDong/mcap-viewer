@@ -151,10 +151,7 @@ impl WriteOptions {
     /// If `None`, chunks will not be automatically closed and the user must call `flush()` to
     /// begin a new chunk.
     pub fn chunk_size(self, chunk_size: Option<u64>) -> Self {
-        Self {
-            chunk_size: chunk_size,
-            ..self
-        }
+        Self { chunk_size, ..self }
     }
 
     /// Creates a [`Writer`] whch writes to `w` using the given options
@@ -650,7 +647,7 @@ enum Compressor<W: Write> {
     #[cfg(feature = "zstd")]
     Zstd(zstd::Encoder<'static, W>),
     #[cfg(feature = "lz4")]
-    Lz4(lz4::Encoder<W>),
+    Lz4(lz4_flex::frame::FrameEncoder<W>),
 }
 
 impl<W: Write> Compressor<W> {
@@ -660,11 +657,7 @@ impl<W: Write> Compressor<W> {
             #[cfg(feature = "zstd")]
             Compressor::Zstd(w) => w.finish()?,
             #[cfg(feature = "lz4")]
-            Compressor::Lz4(w) => {
-                let (w, err) = w.finish();
-                err?;
-                w
-            }
+            Compressor::Lz4(w) => w.finish()?,
         })
     }
 }
@@ -734,14 +727,10 @@ impl<W: Write + Seek> ChunkWriter<W> {
             #[cfg(feature = "zstd")]
             Some(Compression::Zstd) => {
                 let mut enc = zstd::Encoder::new(writer, 0)?;
-                enc.multithread(num_cpus::get_physical() as u32)?;
                 Compressor::Zstd(enc)
             }
             #[cfg(feature = "lz4")]
-            Some(Compression::Lz4) => {
-                let b = lz4::EncoderBuilder::new();
-                Compressor::Lz4(b.build(writer)?)
-            }
+            Some(Compression::Lz4) => Compressor::Lz4(lz4_flex::frame::FrameEncoder::new(writer)),
             #[cfg(all(not(feature = "zstd"), not(feature = "lz4")))]
             Some(_) => unreachable!(),
             None => Compressor::Null(writer),

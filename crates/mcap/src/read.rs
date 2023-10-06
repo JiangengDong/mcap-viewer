@@ -277,7 +277,7 @@ impl<'a> ChunkReader<'a> {
 
             #[cfg(feature = "lz4")]
             "lz4" => ChunkDecompressor::Compressed(Some(CountingCrcReader::new(Box::new(
-                lz4::Decoder::new(data)?,
+                lz4_flex::frame::FrameDecoder::new(data),
             )))),
 
             #[cfg(not(feature = "lz4"))]
