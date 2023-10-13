@@ -23,7 +23,14 @@ num_cpus = "1.13"
 paste = "1.0"
 thiserror = "1.0"
 lz4_flex = { version = "0.11", optional = true }
-zstd = { version = "0.12", default-features = false, optional = true }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+zstd = { version = "0.12", default-features = false, features = [
+    "wasm",
+], optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+zstd = { version = "0.12", features = ["zstdmt"], optional = true }
 
 [features]
 default = ["zstd", "lz4"]
@@ -35,7 +42,7 @@ anyhow = "1"
 atty = "0.2"
 camino = "1.0"
 clap = { version = "3.2", features = ["derive"] }
-itertools = "0.10"
+itertools = "0.11"
 memmap = "0.7"
 rayon = "1.5"
 serde = { version = "1.0.145", features = ["derive"] }

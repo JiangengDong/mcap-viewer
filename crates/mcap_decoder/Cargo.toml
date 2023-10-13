@@ -1,5 +1,5 @@
 [package]
-name = "data_storage"
+name = "mcap_decoder"
 version = "0.1.0"
 edition = "2021"
 
