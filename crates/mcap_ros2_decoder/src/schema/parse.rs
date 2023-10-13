@@ -148,7 +148,11 @@ fn parse_field(
     }
 
     let field_type = field_type.trim();
-    let field_name = remaining.trim();
+    let field_name = remaining
+        .split_whitespace()
+        .find(|s| !s.is_empty())
+        .unwrap()
+        .trim();
     let captures = FIELD_TYPE_PATTERN
         .captures(field_type)
         .ok_or(Error::InvalidFieldType(field_type.to_owned()))?;

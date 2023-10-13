@@ -1587,6 +1587,7 @@ dependencies = [
  "env_logger",
  "log",
  "mcap",
+ "mcap_ros2_decoder",
  "serde",
  "wasm-bindgen-futures",
 ]
