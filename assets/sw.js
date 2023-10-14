@@ -1,4 +1,4 @@
-var cacheName = 'mcap-viewer-pwa-v1.0.2';
+var cacheName = 'mcap-viewer-pwa-v0.0.1';
 var filesToCache = [
   './',
   './index.html',
