@@ -38,22 +38,22 @@ where
     V::Error: std::error::Error + Send + Sync + 'static,
 {
     let mut reader = CdrReader::new(input);
-    let mut field_id = FieldId::with_capacity(16);
+    let mut field_id = FieldId::new();
     decode_inner(schema, &mut reader, visitor, &mut field_id)
 }
 
-fn decode_inner<V>(
-    schema: &Msg,
+fn decode_inner<'a, V>(
+    schema: &'a Msg,
     reader: &mut CdrReader,
     visitor: &mut V,
-    field_id: &mut FieldId,
+    field_id: &mut FieldId<'a>,
 ) -> Result<(), Error>
 where
     V: Visitor,
     V::Error: std::error::Error + Send + Sync + 'static,
 {
     for field in &schema.fields {
-        field_id.push_member(field.name.clone());
+        field_id.push_member(&field.name);
         let size = match field.repitition {
             crate::schema::Repitition::Single => 1,
             crate::schema::Repitition::Fixed(v) => v,

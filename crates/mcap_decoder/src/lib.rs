@@ -1,5 +1,7 @@
 use std::fmt::Display;
 
+use smallvec::SmallVec;
+
 #[cfg(feature = "test-utils")]
 pub mod test_visitor;
 
@@ -28,49 +30,38 @@ pub trait Decoder {
 }
 
 #[derive(Clone, Debug)]
-enum FieldPart {
-    Member(Box<str>),
+enum FieldPart<'a> {
+    Member(&'a str),
     Index,
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct FieldId {
-    parts: Vec<FieldPart>,
-    index: Vec<usize>,
+pub struct FieldId<'a> {
+    parts: SmallVec<[FieldPart<'a>; 8]>,
+    indices: SmallVec<[usize; 4]>,
 }
 
-impl FieldId {
+impl<'a> FieldId<'a> {
     #[must_use]
-    pub const fn new() -> Self {
+    pub fn new() -> Self {
         Self {
-            parts: Vec::new(),
-            index: Vec::new(),
+            parts: SmallVec::new(),
+            indices: SmallVec::new(),
         }
     }
 
-    #[must_use]
-    pub fn with_capacity(capacity: usize) -> Self {
-        Self {
-            parts: Vec::with_capacity(capacity),
-            index: Vec::with_capacity(capacity),
-        }
-    }
-
-    pub fn push_member<S>(&mut self, member: S)
-    where
-        S: Into<Box<str>>,
-    {
-        self.parts.push(FieldPart::Member(member.into()));
+    pub fn push_member(&mut self, member: &'a str) {
+        self.parts.push(FieldPart::Member(member));
     }
 
     pub fn push_index(&mut self, index: usize) {
         self.parts.push(FieldPart::Index);
-        self.index.push(index);
+        self.indices.push(index);
     }
 
     pub fn pop(&mut self) {
         if let Some(FieldPart::Index) = self.parts.pop() {
-            self.index.pop();
+            self.indices.pop();
         }
     }
 
@@ -95,13 +86,13 @@ impl FieldId {
     }
 
     pub fn indices(&self) -> &[usize] {
-        &self.index
+        &self.indices
     }
 }
 
-impl Display for FieldId {
+impl<'a> Display for FieldId<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut idx_iter = self.index.iter().copied();
+        let mut idx_iter = self.indices.iter().copied();
         for part in &self.parts {
             match part {
                 FieldPart::Member(member) => write!(f, ".{}", member)?,
