@@ -19,3 +19,6 @@ env_logger = "0.10.0"
 mcap = { path = "../mcap" }
 memmap = "0.7.0"
 rayon = "1.8.0"
+mcap_decoder = { version = "0.1.0", path = "../mcap_decoder", features = [
+    "test-utils",
+] }
