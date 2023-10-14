@@ -29,7 +29,6 @@ static RE_MSG: Lazy<Regex> = Lazy::new(|| {
 });
 static FIELD_TYPE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([A-Za-z0-9_/]+)(\[(<=)?(\d+)?\])?$").unwrap());
-static FIELD_PREFIX: Lazy<String> = Lazy::new(|| String::from("."));
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -188,7 +187,7 @@ fn parse_field(
             _ => unreachable!(),
         };
         Field {
-            name: FIELD_PREFIX.clone() + field_name,
+            name: field_name.to_owned(),
             ty,
             repitition,
         }
@@ -197,7 +196,7 @@ fn parse_field(
             .unwrap_or_else(|_| MsgId::new(package, field_unit_type));
         let msg = custom_msg_resolver(field_id)?;
         Field {
-            name: FIELD_PREFIX.clone() + field_name,
+            name: field_name.to_owned(),
             ty: Type::Msg(msg),
             repitition,
         }

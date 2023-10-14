@@ -1,6 +1,6 @@
 use std::str::Utf8Error;
 
-use mcap_decoder::Visitor;
+use mcap_decoder::{FieldId, Visitor};
 
 use crate::schema::Msg;
 
@@ -38,28 +38,22 @@ where
     V::Error: std::error::Error + Send + Sync + 'static,
 {
     let mut reader = CdrReader::new(input);
-    let mut field_path = String::with_capacity(256);
-    decode_inner(schema, &mut reader, visitor, &mut field_path)
+    let mut field_id = FieldId::with_capacity(16);
+    decode_inner(schema, &mut reader, visitor, &mut field_id)
 }
-
-const INT_STR_TABLE: [&str; 16] = [
-    "[0]", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]", "[11]", "[12]",
-    "[13]", "[14]", "[15]",
-];
 
 fn decode_inner<V>(
     schema: &Msg,
     reader: &mut CdrReader,
     visitor: &mut V,
-    path: &mut String,
+    field_id: &mut FieldId,
 ) -> Result<(), Error>
 where
     V: Visitor,
     V::Error: std::error::Error + Send + Sync + 'static,
 {
-    let old_path_len = path.len();
     for field in &schema.fields {
-        path.push_str(&field.name);
+        field_id.push_member(field.name.clone());
         let size = match field.repitition {
             crate::schema::Repitition::Single => 1,
             crate::schema::Repitition::Fixed(v) => v,
@@ -68,7 +62,7 @@ where
                 let size = reader.u32() as usize;
                 if size > max_size {
                     return Err(Error::ArraySizeTooLarge {
-                        field: format!("{}.{}", &path, field.name),
+                        field: field_id.to_string(),
                         size,
                         max_size,
                     });
@@ -76,62 +70,53 @@ where
                 size
             }
         };
-        let new_path_len = path.len();
         #[allow(clippy::needless_range_loop)]
         for i in 0..size {
-            if field.repitition != crate::schema::Repitition::Single {
-                if i < 16 {
-                    path.push_str(INT_STR_TABLE[i]);
-                } else {
-                    path.push('[');
-                    path.push_str(&i.to_string());
-                    path.push(']');
-                }
-            }
+            field_id.push_index(i);
             match &field.ty {
                 crate::schema::Type::Bool => visitor
-                    .visit_bool(path, reader.bool())
+                    .visit_bool(field_id, reader.bool())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I8 => visitor
-                    .visit_i8(path, reader.i8())
+                    .visit_i8(field_id, reader.i8())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U8 => visitor
-                    .visit_u8(path, reader.u8())
+                    .visit_u8(field_id, reader.u8())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I16 => visitor
-                    .visit_i16(path, reader.i16())
+                    .visit_i16(field_id, reader.i16())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U16 => visitor
-                    .visit_u16(path, reader.u16())
+                    .visit_u16(field_id, reader.u16())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I32 => visitor
-                    .visit_i32(path, reader.i32())
+                    .visit_i32(field_id, reader.i32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U32 => visitor
-                    .visit_u32(path, reader.u32())
+                    .visit_u32(field_id, reader.u32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I64 => visitor
-                    .visit_i64(path, reader.i64())
+                    .visit_i64(field_id, reader.i64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U64 => visitor
-                    .visit_u64(path, reader.u64())
+                    .visit_u64(field_id, reader.u64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::F32 => visitor
-                    .visit_f32(path, reader.f32())
+                    .visit_f32(field_id, reader.f32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::F64 => visitor
-                    .visit_f64(path, reader.f64())
+                    .visit_f64(field_id, reader.f64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::Str => visitor
-                    .visit_str(path, reader.str()?)
+                    .visit_str(field_id, reader.str()?)
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::Msg(msg_schema) => {
-                    decode_inner(msg_schema, reader, visitor, path)?;
+                    decode_inner(msg_schema, reader, visitor, field_id)?;
                 }
             }
-            path.truncate(new_path_len);
+            field_id.pop();
         }
-        path.truncate(old_path_len);
+        field_id.pop();
     }
     Ok(())
 }
