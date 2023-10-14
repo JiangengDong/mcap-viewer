@@ -2,7 +2,7 @@
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
 use std::{
-    collections::HashMap,
+    collections::{hash_map::RandomState, HashMap},
     sync::{Arc, RwLock},
 };
 
@@ -15,16 +15,27 @@ pub mod decode;
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
     #[error("Schema error: {0}")]
-    Schema(schema::Error),
+    Schema(#[from] schema::Error),
     #[error("Decode error: {0}")]
-    Decode(decode::Error),
+    Decode(#[from] decode::Error),
 }
 
-pub struct Decoder<S> {
+#[derive(Clone, Default)]
+pub struct Decoder<S = RandomState> {
     message_table: Arc<RwLock<HashMap<schema::MsgId, Arc<schema::Msg>, S>>>,
 }
 
-impl<S> mcap_decoder::Decoder for Decoder<S> {
+impl Decoder<RandomState> {
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+impl<S> mcap_decoder::Decoder for Decoder<S>
+where
+    S: std::hash::BuildHasher,
+{
     type Error = Error;
 
     type Schema = Arc<schema::Msg>;
@@ -34,18 +45,34 @@ impl<S> mcap_decoder::Decoder for Decoder<S> {
         schema_name: &str,
         schema_text: &[u8],
     ) -> Result<Self::Schema, Self::Error> {
-        todo!()
+        let mut message_table = self.message_table.write().unwrap();
+        let schema = schema::parse(schema_name, schema_text, &mut message_table)?;
+        Ok(schema)
     }
 
     fn get_schema(&self, schema_name: &str) -> Result<Option<Self::Schema>, Self::Error> {
-        todo!()
+        let message_table = self.message_table.read().unwrap();
+        let schema = schema::get(schema_name, &message_table)?;
+        Ok(schema)
     }
 
-    fn decode<V>(&self, schema_name: &str, input: &[u8], visitor: &mut V) -> Result<(), Self::Error>
+    fn decode<V>(
+        &self,
+        schema_name: &str,
+        schema_text: &[u8],
+        data: &[u8],
+        visitor: &mut V,
+    ) -> Result<(), Self::Error>
     where
         V: Visitor,
-        V::Error: std::error::Error,
+        V::Error: std::error::Error + Send + Sync + 'static,
     {
-        todo!()
+        let schema = if let Some(schema) = self.get_schema(schema_name)? {
+            schema
+        } else {
+            self.parse_schema(schema_name, schema_text)?
+        };
+        decode::decode(&schema, data, visitor)?;
+        Ok(())
     }
 }

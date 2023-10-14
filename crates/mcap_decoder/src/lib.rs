@@ -15,7 +15,8 @@ pub trait Decoder {
     fn decode<V>(
         &self,
         schema_name: &str,
-        input: &[u8],
+        schema_text: &[u8],
+        data: &[u8],
         visitor: &mut V,
     ) -> Result<(), Self::Error>
     where

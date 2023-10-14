@@ -1,12 +1,11 @@
 #![warn(clippy::pedantic)]
 
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use mcap::records::Record;
+use mcap_decoder::Decoder as _;
+use mcap_ros2_decoder::Decoder;
 use rayon::prelude::*;
 
 #[derive(clap::Parser)]
@@ -14,6 +13,8 @@ use rayon::prelude::*;
 struct Cli {
     #[clap(short, long)]
     path: PathBuf,
+    #[clap(short, long)]
+    use_multi_threads: bool,
 }
 
 fn list_all_mcap_files(path: &Path) -> Vec<PathBuf> {
@@ -36,63 +37,105 @@ fn list_all_mcap_files(path: &Path) -> Vec<PathBuf> {
     }
 }
 
-fn main() {
-    let cli = Cli::parse();
-    let file_paths = list_all_mcap_files(&cli.path);
+fn parse_all_schemas(mapped: &memmap::Mmap, decoder: &Decoder) {
+    if let Ok(Some(summary)) = mcap::Summary::read(mapped) {
+        for (_, channel) in summary.channels {
+            let schema = channel.schema.as_ref().unwrap();
+            decoder.parse_schema(&schema.name, &schema.data).unwrap();
+        }
+    } else {
+        let stream = mcap::read::ChunkFlattener::new_with_options(
+            mapped,
+            mcap::read::Options::IgnoreEndMagic.into(),
+        )
+        .unwrap();
+        stream.map_while(std::result::Result::ok).for_each(|r| {
+            if let Record::Schema { header, data } = r {
+                decoder.parse_schema(&header.name, &data).unwrap();
+            }
+        });
+    }
+}
 
-    let mut message_table = std::collections::HashMap::new();
+fn map_file(file_path: PathBuf) -> memmap::Mmap {
+    let fd = std::fs::File::open(file_path).unwrap();
+
+    unsafe { memmap::Mmap::map(&fd).unwrap() }
+}
+
+fn decode_multi_thread(mapped: &memmap::Mmap, decoder: &Decoder) -> usize {
+    let stream =
+        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
+            .unwrap()
+            .map_while(std::result::Result::ok);
+    stream
+        .par_bridge()
+        .map_init(
+            || decoder.clone(),
+            |decoder, message| {
+                let schema = message.channel.schema.as_ref().unwrap();
+                let mut visitor = mcap_decoder::test_visitor::NoopVisitor;
+                decoder
+                    .decode(&schema.name, &schema.data, &message.data, &mut visitor)
+                    .unwrap();
+                1
+            },
+        )
+        .sum()
+}
+
+fn decode_single_thread(mapped: &memmap::Mmap, decoder: &Decoder) -> usize {
+    let stream =
+        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
+            .unwrap()
+            .map_while(std::result::Result::ok);
+    stream
+        .map(|message| {
+            let schema = message.channel.schema.as_ref().unwrap();
+            let mut visitor = mcap_decoder::test_visitor::NoopVisitor;
+            decoder
+                .decode(&schema.name, &schema.data, &message.data, &mut visitor)
+                .unwrap();
+            1
+        })
+        .sum()
+}
+
+#[allow(clippy::cast_precision_loss)]
+fn main() {
+    env_logger::init();
+
+    let cli = Cli::parse();
+    if cli.use_multi_threads {
+        log::debug!("Use multiple threads.");
+    } else {
+        log::debug!("Use single threads.");
+    }
+
+    let file_paths = list_all_mcap_files(&cli.path);
+    let file_count = file_paths.len();
+    let mut msg_count = 0;
+
+    let decoder = Decoder::new();
     let instant = std::time::Instant::now();
 
     for file_path in file_paths {
-        println!("Parsing {file_path:?}");
+        log::trace!("Parsing {file_path:?}");
 
-        let fd = std::fs::File::open(file_path).unwrap();
-        let mapped = unsafe { memmap::Mmap::map(&fd).unwrap() };
+        let mapped = map_file(file_path);
+        parse_all_schemas(&mapped, &decoder);
 
-        if let Ok(Some(summary)) = mcap::Summary::read(&mapped) {
-            for (_, channel) in summary.channels {
-                let schema = channel.schema.as_ref().unwrap();
-                let schema_name = &schema.name;
-                mcap_ros2_decoder::schema::parse(schema_name, &schema.data, &mut message_table)
-                    .unwrap();
-            }
+        if cli.use_multi_threads {
+            msg_count += decode_multi_thread(&mapped, &decoder);
         } else {
-            mcap::read::ChunkFlattener::new_with_options(
-                &mapped,
-                mcap::read::Options::IgnoreEndMagic.into(),
-            )
-            .unwrap()
-            .map_while(std::result::Result::ok)
-            .for_each(|r| {
-                if let Record::Schema { header, data } = r {
-                    let schema_name = &header.name;
-                    mcap_ros2_decoder::schema::parse(schema_name, &data, &mut message_table)
-                        .unwrap();
-                }
-            });
+            msg_count += decode_single_thread(&mapped, &decoder);
         }
-
-        let message_table_arc = Arc::new(message_table);
-        let stream = mcap::MessageStream::new_with_options(
-            &mapped,
-            mcap::read::Options::IgnoreEndMagic.into(),
-        )
-        .unwrap()
-        .map_while(std::result::Result::ok);
-        stream.par_bridge().for_each_init(
-            || message_table_arc.clone(),
-            |message_table, message| {
-                let schema = message.channel.schema.as_ref().unwrap();
-                let schema_name = &schema.name;
-                let schema = mcap_ros2_decoder::schema::get(schema_name, message_table)
-                    .unwrap()
-                    .unwrap();
-                let mut visitor = mcap_decoder::test_visitor::NoopVisitor;
-                mcap_ros2_decoder::decode::decode(&schema, &message.data, &mut visitor).unwrap();
-            },
-        );
-
-        message_table = Arc::try_unwrap(message_table_arc).unwrap();
     }
-    println!("Take {:?} to parse all the mcaps.", instant.elapsed());
+
+    let elapsed_time = instant.elapsed();
+    log::info!("Take {elapsed_time:?} to parse {msg_count} messages from {file_count} mcap files.");
+    log::info!(
+        "Average speed: {:.2} messages / sec.",
+        msg_count as f64 / elapsed_time.as_secs_f64()
+    );
 }
