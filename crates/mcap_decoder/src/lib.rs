@@ -7,18 +7,20 @@ pub trait Decoder {
     fn parse_schema(
         &self,
         schema_name: &str,
-        schema_text: &str,
+        schema_text: &[u8],
     ) -> Result<Self::Schema, Self::Error>;
 
-    fn decode<V, E>(
+    fn get_schema(&self, schema_name: &str) -> Result<Option<Self::Schema>, Self::Error>;
+
+    fn decode<V>(
         &self,
         schema_name: &str,
         input: &[u8],
         visitor: &mut V,
     ) -> Result<(), Self::Error>
     where
-        V: Visitor<Error = E>,
-        Self::Error: From<E>;
+        V: Visitor,
+        V::Error: std::error::Error + Send + Sync + 'static;
 }
 
 macro_rules! gen_visitor_method {

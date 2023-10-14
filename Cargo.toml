@@ -46,3 +46,6 @@ opt-level = 2
 
 [profile.bench]
 debug = true
+
+[dev-dependencies]
+clap = { version = "4.4.6", features = ["derive"] }

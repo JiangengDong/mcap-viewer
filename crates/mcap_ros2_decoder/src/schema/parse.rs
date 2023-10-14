@@ -31,13 +31,19 @@ static FIELD_TYPE_PATTERN: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"^([A-Za-z0-9_/]+)(\[(<=)?(\d+)?\])?$").unwrap());
 static FIELD_PREFIX: Lazy<String> = Lazy::new(|| String::from("."));
 
-#[derive(Debug)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
+    #[error("message name `{0}` is invalid")]
     InvalidMessageName(String),
+    #[error("Cannot find message name from `{0}`")]
     MissingMessageName(String),
+    #[error("Cannot find message definition for `{0:?}`")]
     MissingMessageDefinition(MsgId),
+    #[error("Field definition `{0}` is invalid")]
     InvalidFieldDefinition(String),
+    #[error("Field type `{0}` is invalid")]
     InvalidFieldType(String),
+    #[error("Schema test is not valid UTF8: {0}")]
     SchemaTextUtf8(Utf8Error),
 }
 

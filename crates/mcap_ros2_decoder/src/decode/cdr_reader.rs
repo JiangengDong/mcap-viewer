@@ -1,6 +1,6 @@
 use std::{mem::size_of, str};
 
-use super::DecodeError;
+use super::Error;
 
 macro_rules! impl_value {
 ( $($name:ident), +) => {
@@ -61,7 +61,7 @@ impl CdrReader<'_> {
 
     impl_value!(i16, u16, i32, u32, i64, u64, f32, f64);
 
-    pub fn str<E>(&mut self) -> Result<&str, DecodeError<E>> {
+    pub fn str(&mut self) -> Result<&str, Error> {
         let length = self.u32() as usize;
         if length <= 1 {
             self.offset += length;
@@ -69,7 +69,7 @@ impl CdrReader<'_> {
         } else {
             let data = &self.data[self.offset..self.offset + length - 1];
             self.offset += length;
-            str::from_utf8(data).map_err(|e| DecodeError::Utf8Error {
+            str::from_utf8(data).map_err(|e| Error::Utf8Error {
                 error: e,
                 data: data.to_vec(),
             })

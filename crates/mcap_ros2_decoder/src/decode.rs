@@ -9,26 +9,33 @@ use self::cdr_reader::CdrReader;
 mod cdr_reader;
 
 #[derive(Debug, thiserror::Error)]
-pub enum DecodeError<E> {
+pub enum Error {
     #[error("The array size for field {field} has maximum size {max_size}, but got {size}")]
     ArraySizeTooLarge {
         field: String,
         size: usize,
         max_size: usize,
     },
-    #[error("Got error from the visitor: {0}")]
-    Visitor(#[from] E),
     #[error("Got utf8 error {error} when decoding data (hex representation): {data:02?}")]
     Utf8Error {
         #[source]
         error: Utf8Error,
         data: Vec<u8>,
     },
+    #[error(transparent)]
+    Visitor(#[from] anyhow::Error),
 }
 
-pub fn decode<V, E>(schema: &Msg, input: &[u8], visitor: &mut V) -> Result<(), DecodeError<E>>
+impl Error {
+    fn from_visitor(e: impl std::error::Error + Send + Sync + 'static) -> Self {
+        Self::Visitor(anyhow::Error::new(e))
+    }
+}
+
+pub fn decode<V>(schema: &Msg, input: &[u8], visitor: &mut V) -> Result<(), Error>
 where
-    V: Visitor<Error = E>,
+    V: Visitor,
+    V::Error: std::error::Error + Send + Sync + 'static,
 {
     let mut reader = CdrReader::new(input);
     let mut field_path = String::with_capacity(256);
@@ -40,14 +47,15 @@ const INT_STR_TABLE: [&str; 16] = [
     "[13]", "[14]", "[15]",
 ];
 
-fn decode_inner<V, E>(
+fn decode_inner<V>(
     schema: &Msg,
     reader: &mut CdrReader,
     visitor: &mut V,
     path: &mut String,
-) -> Result<(), DecodeError<E>>
+) -> Result<(), Error>
 where
-    V: Visitor<Error = E>,
+    V: Visitor,
+    V::Error: std::error::Error + Send + Sync + 'static,
 {
     let old_path_len = path.len();
     for field in &schema.fields {
@@ -59,7 +67,7 @@ where
             crate::schema::Repitition::Bounded(max_size) => {
                 let size = reader.u32() as usize;
                 if size > max_size {
-                    return Err(DecodeError::ArraySizeTooLarge {
+                    return Err(Error::ArraySizeTooLarge {
                         field: format!("{}.{}", &path, field.name),
                         size,
                         max_size,
@@ -81,18 +89,42 @@ where
                 }
             }
             match &field.ty {
-                crate::schema::Type::Bool => visitor.visit_bool(path, reader.bool())?,
-                crate::schema::Type::I8 => visitor.visit_i8(path, reader.i8())?,
-                crate::schema::Type::U8 => visitor.visit_u8(path, reader.u8())?,
-                crate::schema::Type::I16 => visitor.visit_i16(path, reader.i16())?,
-                crate::schema::Type::U16 => visitor.visit_u16(path, reader.u16())?,
-                crate::schema::Type::I32 => visitor.visit_i32(path, reader.i32())?,
-                crate::schema::Type::U32 => visitor.visit_u32(path, reader.u32())?,
-                crate::schema::Type::I64 => visitor.visit_i64(path, reader.i64())?,
-                crate::schema::Type::U64 => visitor.visit_u64(path, reader.u64())?,
-                crate::schema::Type::F32 => visitor.visit_f32(path, reader.f32())?,
-                crate::schema::Type::F64 => visitor.visit_f64(path, reader.f64())?,
-                crate::schema::Type::Str => visitor.visit_str(path, reader.str()?)?,
+                crate::schema::Type::Bool => visitor
+                    .visit_bool(path, reader.bool())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::I8 => visitor
+                    .visit_i8(path, reader.i8())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::U8 => visitor
+                    .visit_u8(path, reader.u8())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::I16 => visitor
+                    .visit_i16(path, reader.i16())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::U16 => visitor
+                    .visit_u16(path, reader.u16())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::I32 => visitor
+                    .visit_i32(path, reader.i32())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::U32 => visitor
+                    .visit_u32(path, reader.u32())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::I64 => visitor
+                    .visit_i64(path, reader.i64())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::U64 => visitor
+                    .visit_u64(path, reader.u64())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::F32 => visitor
+                    .visit_f32(path, reader.f32())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::F64 => visitor
+                    .visit_f64(path, reader.f64())
+                    .map_err(Error::from_visitor)?,
+                crate::schema::Type::Str => visitor
+                    .visit_str(path, reader.str()?)
+                    .map_err(Error::from_visitor)?,
                 crate::schema::Type::Msg(msg_schema) => {
                     decode_inner(msg_schema, reader, visitor, path)?;
                 }
