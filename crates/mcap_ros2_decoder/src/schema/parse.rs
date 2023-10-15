@@ -187,7 +187,7 @@ fn parse_field(
             _ => unreachable!(),
         };
         Field {
-            name: field_name.to_owned(),
+            name: ".".to_owned() + field_name,
             ty,
             repitition,
         }
@@ -196,7 +196,7 @@ fn parse_field(
             .unwrap_or_else(|_| MsgId::new(package, field_unit_type));
         let msg = custom_msg_resolver(field_id)?;
         Field {
-            name: field_name.to_owned(),
+            name: ".".to_owned() + field_name,
             ty: Type::Msg(msg),
             repitition,
         }

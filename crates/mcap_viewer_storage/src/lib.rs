@@ -1,7 +1,5 @@
 use hashbrown::HashMap;
 
-use mcap_decoder::FieldId;
-
 #[derive(Debug, Default)]
 pub struct DataStorage(pub HashMap<String, TopicStorage>);
 
@@ -72,12 +70,8 @@ pub struct Visitor<'a> {
 
 macro_rules! gen_visitor_method {
     ($name:ident, $forward_name:ident, $ty:ty) => {
-        fn $name(&mut self, field: &FieldId, value: $ty) -> Result<(), Self::Error> {
-            let time_series = self
-                .storage
-                .0
-                .entry_ref(&field.to_index_string())
-                .or_default();
+        fn $name(&mut self, field: &str, value: $ty) -> Result<(), Self::Error> {
+            let time_series = self.storage.0.entry_ref(field).or_default();
             time_series.$forward_name(self.timestamp, value);
             Ok(())
         }
@@ -99,7 +93,7 @@ impl mcap_decoder::Visitor for Visitor<'_> {
     gen_visitor_method!(visit_f32, push_f32, f32);
     gen_visitor_method!(visit_f64, push_f64, f64);
 
-    fn visit_str(&mut self, _field: &FieldId, _value: &str) -> Result<(), Self::Error> {
+    fn visit_str(&mut self, _field: &str, _value: &str) -> Result<(), Self::Error> {
         // TODO: implement this when I really need to access string
         Ok(())
     }

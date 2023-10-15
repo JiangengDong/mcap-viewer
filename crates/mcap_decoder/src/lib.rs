@@ -1,7 +1,3 @@
-use std::fmt::{Display, Write};
-
-use smallvec::SmallVec;
-
 #[cfg(feature = "test-utils")]
 pub mod test_visitor;
 
@@ -29,120 +25,9 @@ pub trait Decoder {
         V::Error: std::error::Error + Send + Sync + 'static;
 }
 
-#[derive(Clone, Debug)]
-enum FieldPart<'a> {
-    Member(&'a str),
-    Index,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct FieldId<'a> {
-    parts: SmallVec<[FieldPart<'a>; 8]>,
-    indices: SmallVec<[usize; 4]>,
-}
-
-impl<'a> FieldId<'a> {
-    #[must_use]
-    pub fn new() -> Self {
-        Self {
-            parts: SmallVec::new(),
-            indices: SmallVec::new(),
-        }
-    }
-
-    pub fn push_member(&mut self, member: &'a str) {
-        self.parts.push(FieldPart::Member(member));
-    }
-
-    pub fn push_index(&mut self, index: usize) {
-        self.parts.push(FieldPart::Index);
-        self.indices.push(index);
-    }
-
-    pub fn pop(&mut self) {
-        if let Some(FieldPart::Index) = self.parts.pop() {
-            self.indices.pop();
-        }
-    }
-
-    pub fn to_index_string(&self) -> String {
-        let total_len_hint = self.len_no_index_string() + self.indices.len() * 2;
-
-        let mut total_s = String::with_capacity(total_len_hint);
-        let mut idx_iter = self.indices.iter().copied();
-        for part in &self.parts {
-            match part {
-                FieldPart::Member(s) => {
-                    total_s.push('.');
-                    total_s.push_str(s);
-                }
-                FieldPart::Index => {
-                    total_s.push('[');
-                    total_s.push_str(&idx_iter.next().unwrap().to_string());
-                    total_s.push(']');
-                }
-            }
-        }
-
-        total_s
-    }
-
-    pub fn to_no_index_string(&self) -> String {
-        let total_len = self.len_no_index_string();
-
-        let mut total_s = String::with_capacity(total_len);
-        for part in &self.parts {
-            match part {
-                FieldPart::Member(s) => {
-                    total_s.push('.');
-                    total_s.push_str(s);
-                }
-                FieldPart::Index => total_s.push_str("[]"),
-            }
-        }
-
-        total_s
-    }
-
-    pub fn len_no_index_string(&self) -> usize {
-        let mut total_len = 0;
-        for part in &self.parts {
-            match part {
-                FieldPart::Member(s) => total_len += s.len() + 1,
-                FieldPart::Index => total_len += 2,
-            }
-        }
-        total_len
-    }
-
-    pub fn indices(&self) -> &[usize] {
-        &self.indices
-    }
-}
-
-impl<'a> Display for FieldId<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut idx_iter = self.indices.iter().copied();
-        for part in &self.parts {
-            match part {
-                FieldPart::Member(member) => {
-                    f.write_char('.')?;
-                    f.write_str(member)?;
-                }
-                FieldPart::Index => {
-                    f.write_char('[')?;
-                    f.write_str(&idx_iter.next().unwrap().to_string())?;
-                    f.write_char(']')?;
-                }
-            }
-        }
-        Ok(())
-    }
-}
-
 macro_rules! gen_visitor_method {
     ($name:ident, $ty:ty) => {
-        fn $name(&mut self, field: &FieldId, value: $ty) -> Result<(), Self::Error>;
+        fn $name(&mut self, field: &str, value: $ty) -> Result<(), Self::Error>;
     };
 }
 

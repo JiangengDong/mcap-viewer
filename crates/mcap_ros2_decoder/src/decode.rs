@@ -1,6 +1,6 @@
 use std::str::Utf8Error;
 
-use mcap_decoder::{FieldId, Visitor};
+use mcap_decoder::Visitor;
 
 use crate::schema::Msg;
 
@@ -38,22 +38,38 @@ where
     V::Error: std::error::Error + Send + Sync + 'static,
 {
     let mut reader = CdrReader::new(input);
-    let mut field_id = FieldId::new();
-    decode_inner(schema, &mut reader, visitor, &mut field_id)
+    let mut field_path = String::with_capacity(256);
+    decode_inner(schema, &mut reader, visitor, &mut field_path)
 }
 
-fn decode_inner<'a, V>(
-    schema: &'a Msg,
+fn push_index(s: &mut String, i: usize) {
+    const INDEX_TABLE: [&str; 16] = [
+        "[0]", "[1]", "[2]", "[3]", "[4]", "[5]", "[6]", "[7]", "[8]", "[9]", "[10]", "[11]",
+        "[12]", "[13]", "[14]", "[15]",
+    ];
+
+    if i < 16 {
+        s.push_str(unsafe { INDEX_TABLE.get_unchecked(i) });
+    } else {
+        s.push('[');
+        s.push_str(&i.to_string());
+        s.push(']');
+    }
+}
+
+fn decode_inner<V>(
+    schema: &Msg,
     reader: &mut CdrReader,
     visitor: &mut V,
-    field_id: &mut FieldId<'a>,
+    field_path: &mut String,
 ) -> Result<(), Error>
 where
     V: Visitor,
     V::Error: std::error::Error + Send + Sync + 'static,
 {
+    let old_field_path_len = field_path.len();
     for field in &schema.fields {
-        field_id.push_member(&field.name);
+        field_path.push_str(&field.name);
         let size = match field.repitition {
             crate::schema::Repitition::Single => 1,
             crate::schema::Repitition::Fixed(v) => v,
@@ -62,7 +78,7 @@ where
                 let size = reader.u32() as usize;
                 if size > max_size {
                     return Err(Error::ArraySizeTooLarge {
-                        field: field_id.to_string(),
+                        field: field_path.clone(),
                         size,
                         max_size,
                     });
@@ -70,53 +86,55 @@ where
                 size
             }
         };
+
+        let new_field_path_len = field_path.len();
         #[allow(clippy::needless_range_loop)]
         for i in 0..size {
-            field_id.push_index(i);
+            push_index(field_path, i);
             match &field.ty {
                 crate::schema::Type::Bool => visitor
-                    .visit_bool(field_id, reader.bool())
+                    .visit_bool(field_path, reader.bool())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I8 => visitor
-                    .visit_i8(field_id, reader.i8())
+                    .visit_i8(field_path, reader.i8())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U8 => visitor
-                    .visit_u8(field_id, reader.u8())
+                    .visit_u8(field_path, reader.u8())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I16 => visitor
-                    .visit_i16(field_id, reader.i16())
+                    .visit_i16(field_path, reader.i16())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U16 => visitor
-                    .visit_u16(field_id, reader.u16())
+                    .visit_u16(field_path, reader.u16())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I32 => visitor
-                    .visit_i32(field_id, reader.i32())
+                    .visit_i32(field_path, reader.i32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U32 => visitor
-                    .visit_u32(field_id, reader.u32())
+                    .visit_u32(field_path, reader.u32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::I64 => visitor
-                    .visit_i64(field_id, reader.i64())
+                    .visit_i64(field_path, reader.i64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::U64 => visitor
-                    .visit_u64(field_id, reader.u64())
+                    .visit_u64(field_path, reader.u64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::F32 => visitor
-                    .visit_f32(field_id, reader.f32())
+                    .visit_f32(field_path, reader.f32())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::F64 => visitor
-                    .visit_f64(field_id, reader.f64())
+                    .visit_f64(field_path, reader.f64())
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::Str => visitor
-                    .visit_str(field_id, reader.str()?)
+                    .visit_str(field_path, reader.str()?)
                     .map_err(Error::from_visitor)?,
                 crate::schema::Type::Msg(msg_schema) => {
-                    decode_inner(msg_schema, reader, visitor, field_id)?;
+                    decode_inner(msg_schema, reader, visitor, field_path)?;
                 }
             }
-            field_id.pop();
+            field_path.truncate(new_field_path_len);
         }
-        field_id.pop();
+        field_path.truncate(old_field_path_len);
     }
     Ok(())
 }
