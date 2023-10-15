@@ -84,21 +84,23 @@ fn decode_multi_thread(mapped: &memmap::Mmap, decoder: &Decoder) -> usize {
         .sum()
 }
 
-fn decode_single_thread(mapped: &memmap::Mmap, decoder: &Decoder) -> usize {
+fn decode_single_thread(
+    mapped: &memmap::Mmap,
+    decoder: &Decoder,
+    storage: &mut mcap_viewer_storage::DataStorage,
+) {
     let stream =
         mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
             .unwrap()
             .map_while(std::result::Result::ok);
-    stream
-        .map(|message| {
-            let schema = message.channel.schema.as_ref().unwrap();
-            let mut visitor = mcap_decoder::test_visitor::NoopVisitor;
-            decoder
-                .decode(&schema.name, &schema.data, &message.data, &mut visitor)
-                .unwrap();
-            1
-        })
-        .sum()
+    stream.for_each(|message| {
+        let channel = message.channel;
+        let schema = channel.schema.as_ref().unwrap();
+        let mut visitor = storage.insert(&channel.topic, message.publish_time);
+        decoder
+            .decode(&schema.name, &schema.data, &message.data, &mut visitor)
+            .unwrap();
+    });
 }
 
 #[allow(clippy::cast_precision_loss)]
@@ -114,9 +116,9 @@ fn main() {
 
     let file_paths = list_all_mcap_files(&cli.path);
     let file_count = file_paths.len();
-    let mut msg_count = 0;
 
     let decoder = Decoder::new();
+    let mut storage = mcap_viewer_storage::DataStorage::new();
     let instant = std::time::Instant::now();
 
     for file_path in file_paths {
@@ -126,16 +128,13 @@ fn main() {
         parse_all_schemas(&mapped, &decoder);
 
         if cli.use_multi_threads {
-            msg_count += decode_multi_thread(&mapped, &decoder);
+            // msg_count += decode_multi_thread(&mapped, &decoder);
+            unimplemented!();
         } else {
-            msg_count += decode_single_thread(&mapped, &decoder);
+            decode_single_thread(&mapped, &decoder, &mut storage);
         }
     }
 
     let elapsed_time = instant.elapsed();
-    log::info!("Take {elapsed_time:?} to parse {msg_count} messages from {file_count} mcap files.");
-    log::info!(
-        "Average speed: {:.2} messages / sec.",
-        msg_count as f64 / elapsed_time.as_secs_f64()
-    );
+    log::info!("Take {elapsed_time:?} to parse {file_count} mcap files.");
 }

@@ -4,4 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+hashbrown = "0.14.1"
 mcap_decoder = { version = "0.1.0", path = "../mcap_decoder" }
+rustc-hash = "1.1.0"

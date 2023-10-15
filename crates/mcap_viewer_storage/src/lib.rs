@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use mcap_decoder::FieldId;
 
@@ -8,7 +8,7 @@ pub struct DataStorage(pub HashMap<String, TopicStorage>);
 impl DataStorage {
     #[must_use]
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self(HashMap::default())
     }
 
     pub fn insert(&mut self, topic: &str, timestamp: u64) -> Visitor<'_> {
@@ -55,7 +55,7 @@ pub struct TopicStorage(pub HashMap<String, TimeSeries>);
 impl TopicStorage {
     #[must_use]
     pub fn new() -> Self {
-        Self(HashMap::new())
+        Self(HashMap::default())
     }
 
     pub fn sort_unstable(&mut self) {
@@ -73,7 +73,11 @@ pub struct Visitor<'a> {
 macro_rules! gen_visitor_method {
     ($name:ident, $forward_name:ident, $ty:ty) => {
         fn $name(&mut self, field: &FieldId, value: $ty) -> Result<(), Self::Error> {
-            let time_series = self.storage.0.entry(field.to_index_string()).or_default();
+            let time_series = self
+                .storage
+                .0
+                .entry_ref(&field.to_index_string())
+                .or_default();
             time_series.$forward_name(self.timestamp, value);
             Ok(())
         }
@@ -81,7 +85,7 @@ macro_rules! gen_visitor_method {
 }
 
 impl mcap_decoder::Visitor for Visitor<'_> {
-    type Error = ();
+    type Error = std::convert::Infallible;
 
     gen_visitor_method!(visit_bool, push_bool, bool);
     gen_visitor_method!(visit_i8, push_i8, i8);
