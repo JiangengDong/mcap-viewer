@@ -38,15 +38,15 @@ fn list_all_mcap_files(path: &Path) -> Vec<PathBuf> {
     }
 }
 
-fn parse_all_schemas(mapped: &memmap::Mmap, decoder: &Decoder) {
-    if let Ok(Some(summary)) = mcap::Summary::read(mapped) {
+fn parse_all_schemas(bytes: &[u8], decoder: &Decoder) {
+    if let Ok(Some(summary)) = mcap::Summary::read(bytes) {
         for (_, channel) in summary.channels {
             let schema = channel.schema.as_ref().unwrap();
             decoder.parse_schema(&schema.name, &schema.data).unwrap();
         }
     } else {
         let stream = mcap::read::ChunkFlattener::new_with_options(
-            mapped,
+            bytes,
             mcap::read::Options::IgnoreEndMagic.into(),
         )
         .unwrap();
@@ -58,10 +58,8 @@ fn parse_all_schemas(mapped: &memmap::Mmap, decoder: &Decoder) {
     }
 }
 
-fn map_file(file_path: PathBuf) -> memmap::Mmap {
-    let fd = std::fs::File::open(file_path).unwrap();
-
-    unsafe { memmap::Mmap::map(&fd).unwrap() }
+fn map_file(file_path: PathBuf) -> Vec<u8> {
+    std::fs::read(file_path).unwrap()
 }
 
 fn decode_multi_thread<S>(stream: S, decoder: &Decoder, storage: &mut DataStorage)
@@ -124,12 +122,12 @@ fn main() {
     let mut storage = DataStorage::new();
     let instant = std::time::Instant::now();
 
-    let mapped_files: Vec<_> = file_paths.into_iter().map(map_file).collect();
-    for mapped in &mapped_files {
-        parse_all_schemas(mapped, &decoder);
+    let all_bytes: Vec<_> = file_paths.into_iter().map(map_file).collect();
+    for bytes in &all_bytes {
+        parse_all_schemas(bytes, &decoder);
     }
-    let stream = mapped_files.iter().flat_map(|mapped| {
-        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
+    let stream = all_bytes.iter().flat_map(|bytes| {
+        mcap::MessageStream::new_with_options(bytes, mcap::read::Options::IgnoreEndMagic.into())
             .unwrap()
             .map_while(std::result::Result::ok)
     });
@@ -140,8 +138,11 @@ fn main() {
         decode_single_thread(stream, &decoder, &mut storage);
     }
 
-    storage.sort_unstable();
-
     let elapsed_time = instant.elapsed();
     log::info!("Take {elapsed_time:?} to parse {file_count} mcap files.");
+
+    let instant = std::time::Instant::now();
+    storage.sort_unstable();
+    let elapsed_time = instant.elapsed();
+    log::info!("Take {elapsed_time:?} to sort.");
 }
