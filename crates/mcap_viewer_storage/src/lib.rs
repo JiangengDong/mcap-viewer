@@ -41,10 +41,29 @@ impl DataStorage {
             }
         }
     }
+
+    pub fn sort_unstable(&mut self) {
+        for topic_storage in self.0.values_mut() {
+            topic_storage.sort_unstable();
+        }
+    }
 }
 
 #[derive(Debug, Default)]
 pub struct TopicStorage(pub HashMap<String, TimeSeries>);
+
+impl TopicStorage {
+    #[must_use]
+    pub fn new() -> Self {
+        Self(HashMap::new())
+    }
+
+    pub fn sort_unstable(&mut self) {
+        for time_series in self.0.values_mut() {
+            time_series.sort_unstable();
+        }
+    }
+}
 
 pub struct Visitor<'a> {
     storage: &'a mut TopicStorage,
@@ -162,6 +181,23 @@ impl TimeSeries {
             TimeSeries::U64(v) => v.len(),
             TimeSeries::F32(v) => v.len(),
             TimeSeries::F64(v) => v.len(),
+        }
+    }
+
+    pub fn sort_unstable(&mut self) {
+        match self {
+            TimeSeries::Uninit => {}
+            TimeSeries::Bool(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::I8(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::I16(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::I32(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::I64(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::U8(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::U16(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::U32(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::U64(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::F32(v) => v.sort_unstable_by_key(|(time, _)| *time),
+            TimeSeries::F64(v) => v.sort_unstable_by_key(|(time, _)| *time),
         }
     }
 
