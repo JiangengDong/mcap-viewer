@@ -140,6 +140,8 @@ fn main() {
         decode_single_thread(stream, &decoder, &mut storage);
     }
 
+    storage.sort_unstable();
+
     let elapsed_time = instant.elapsed();
     log::info!("Take {elapsed_time:?} to parse {file_count} mcap files.");
 }
