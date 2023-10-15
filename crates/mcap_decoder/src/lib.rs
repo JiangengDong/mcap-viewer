@@ -1,4 +1,4 @@
-use std::fmt::Display;
+use std::fmt::{Display, Write};
 
 use smallvec::SmallVec;
 
@@ -65,24 +65,54 @@ impl<'a> FieldId<'a> {
         }
     }
 
-    pub fn to_no_index_string(&self) -> String {
-        let mut total_len = 0;
+    pub fn to_index_string(&self) -> String {
+        let total_len_hint = self.len_no_index_string() + self.indices.len() * 2;
+
+        let mut total_s = String::with_capacity(total_len_hint);
+        let mut idx_iter = self.indices.iter().copied();
         for part in &self.parts {
             match part {
-                FieldPart::Member(s) => total_len += s.len(),
-                FieldPart::Index => total_len += 4,
+                FieldPart::Member(s) => {
+                    total_s.push('.');
+                    total_s.push_str(s);
+                }
+                FieldPart::Index => {
+                    total_s.push('[');
+                    total_s.push_str(&idx_iter.next().unwrap().to_string());
+                    total_s.push(']');
+                }
             }
         }
+
+        total_s
+    }
+
+    pub fn to_no_index_string(&self) -> String {
+        let total_len = self.len_no_index_string();
 
         let mut total_s = String::with_capacity(total_len);
         for part in &self.parts {
             match part {
-                FieldPart::Member(s) => total_s.push_str(s),
+                FieldPart::Member(s) => {
+                    total_s.push('.');
+                    total_s.push_str(s);
+                }
                 FieldPart::Index => total_s.push_str("[]"),
             }
         }
 
         total_s
+    }
+
+    pub fn len_no_index_string(&self) -> usize {
+        let mut total_len = 0;
+        for part in &self.parts {
+            match part {
+                FieldPart::Member(s) => total_len += s.len() + 1,
+                FieldPart::Index => total_len += 2,
+            }
+        }
+        total_len
     }
 
     pub fn indices(&self) -> &[usize] {
@@ -95,8 +125,15 @@ impl<'a> Display for FieldId<'a> {
         let mut idx_iter = self.indices.iter().copied();
         for part in &self.parts {
             match part {
-                FieldPart::Member(member) => write!(f, ".{}", member)?,
-                FieldPart::Index => write!(f, "[{}]", idx_iter.next().unwrap())?,
+                FieldPart::Member(member) => {
+                    f.write_char('.')?;
+                    f.write_str(member)?;
+                }
+                FieldPart::Index => {
+                    f.write_char('[')?;
+                    f.write_str(&idx_iter.next().unwrap().to_string())?;
+                    f.write_char(']')?;
+                }
             }
         }
         Ok(())
