@@ -3,9 +3,10 @@
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use mcap::records::Record;
+use mcap::{records::Record, Message};
 use mcap_decoder::Decoder as _;
 use mcap_ros2_decoder::Decoder;
+use mcap_viewer_storage::DataStorage;
 use rayon::prelude::*;
 
 #[derive(clap::Parser)]
@@ -63,36 +64,38 @@ fn map_file(file_path: PathBuf) -> memmap::Mmap {
     unsafe { memmap::Mmap::map(&fd).unwrap() }
 }
 
-fn decode_multi_thread(mapped: &memmap::Mmap, decoder: &Decoder) -> usize {
-    let stream =
-        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
-            .unwrap()
-            .map_while(std::result::Result::ok);
-    stream
+fn decode_multi_thread<S>(stream: S, decoder: &Decoder, storage: &mut DataStorage)
+where
+    S: Iterator<Item = Message<'static>> + Send,
+{
+    let new_storage = stream
         .par_bridge()
-        .map_init(
-            || decoder.clone(),
-            |decoder, message| {
-                let schema = message.channel.schema.as_ref().unwrap();
-                let mut visitor = mcap_decoder::test_visitor::NoopVisitor;
+        .fold(
+            || (decoder.clone(), DataStorage::new()),
+            |(decoder, mut storage), message| {
+                let channel = message.channel;
+                let schema = channel.schema.as_ref().unwrap();
+                let mut visitor = storage.insert(&channel.topic, message.publish_time);
                 decoder
                     .decode(&schema.name, &schema.data, &message.data, &mut visitor)
                     .unwrap();
-                1
+                (decoder, storage)
             },
         )
-        .sum()
+        .map(|(_, storage)| storage)
+        .reduce_with(|mut storage1, storage2| {
+            storage1.merge(storage2);
+            storage1
+        });
+    if let Some(new_storage) = new_storage {
+        storage.merge(new_storage);
+    }
 }
 
-fn decode_single_thread(
-    mapped: &memmap::Mmap,
-    decoder: &Decoder,
-    storage: &mut mcap_viewer_storage::DataStorage,
-) {
-    let stream =
-        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
-            .unwrap()
-            .map_while(std::result::Result::ok);
+fn decode_single_thread<S>(stream: S, decoder: &Decoder, storage: &mut DataStorage)
+where
+    S: Iterator<Item = Message<'static>> + Send,
+{
     stream.for_each(|message| {
         let channel = message.channel;
         let schema = channel.schema.as_ref().unwrap();
@@ -118,21 +121,23 @@ fn main() {
     let file_count = file_paths.len();
 
     let decoder = Decoder::new();
-    let mut storage = mcap_viewer_storage::DataStorage::new();
+    let mut storage = DataStorage::new();
     let instant = std::time::Instant::now();
 
-    for file_path in file_paths {
-        log::trace!("Parsing {file_path:?}");
+    let mapped_files: Vec<_> = file_paths.into_iter().map(map_file).collect();
+    for mapped in &mapped_files {
+        parse_all_schemas(mapped, &decoder);
+    }
+    let stream = mapped_files.iter().flat_map(|mapped| {
+        mcap::MessageStream::new_with_options(mapped, mcap::read::Options::IgnoreEndMagic.into())
+            .unwrap()
+            .map_while(std::result::Result::ok)
+    });
 
-        let mapped = map_file(file_path);
-        parse_all_schemas(&mapped, &decoder);
-
-        if cli.use_multi_threads {
-            // msg_count += decode_multi_thread(&mapped, &decoder);
-            unimplemented!();
-        } else {
-            decode_single_thread(&mapped, &decoder, &mut storage);
-        }
+    if cli.use_multi_threads {
+        decode_multi_thread(stream, &decoder, &mut storage);
+    } else {
+        decode_single_thread(stream, &decoder, &mut storage);
     }
 
     let elapsed_time = instant.elapsed();

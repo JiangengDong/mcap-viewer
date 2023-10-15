@@ -140,6 +140,12 @@ macro_rules! gen_time_series_method {
 
         pub fn $as_mut_method_name(&mut self) -> Option<&mut Vec<(u64, $ty)>> {
             match self {
+                TimeSeries::Uninit => {
+                    *self = TimeSeries::$variant(vec![]);
+                }
+                _ => {}
+            }
+            match self {
                 TimeSeries::$variant(v) => Some(v),
                 _ => None,
             }
