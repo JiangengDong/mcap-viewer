@@ -18,6 +18,29 @@ impl DataStorage {
             timestamp,
         }
     }
+
+    pub fn merge(&mut self, rhs: DataStorage) {
+        for (topic, rhs_topic_storage) in rhs.0 {
+            let topic_storage = self.0.entry(topic).or_default();
+            for (field, rhs_time_series) in rhs_topic_storage.0 {
+                let time_series = topic_storage.0.entry(field).or_default();
+                match rhs_time_series {
+                    TimeSeries::Uninit => {}
+                    TimeSeries::Bool(v) => time_series.as_mut_bool().unwrap().extend(v),
+                    TimeSeries::I8(v) => time_series.as_mut_i8().unwrap().extend(v),
+                    TimeSeries::I16(v) => time_series.as_mut_i16().unwrap().extend(v),
+                    TimeSeries::I32(v) => time_series.as_mut_i32().unwrap().extend(v),
+                    TimeSeries::I64(v) => time_series.as_mut_i64().unwrap().extend(v),
+                    TimeSeries::U8(v) => time_series.as_mut_u8().unwrap().extend(v),
+                    TimeSeries::U16(v) => time_series.as_mut_u16().unwrap().extend(v),
+                    TimeSeries::U32(v) => time_series.as_mut_u32().unwrap().extend(v),
+                    TimeSeries::U64(v) => time_series.as_mut_u64().unwrap().extend(v),
+                    TimeSeries::F32(v) => time_series.as_mut_f32().unwrap().extend(v),
+                    TimeSeries::F64(v) => time_series.as_mut_f64().unwrap().extend(v),
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -77,7 +100,7 @@ pub enum TimeSeries {
 }
 
 macro_rules! gen_time_series_method {
-    ($push_method_name:ident, $iter_method_name:ident, $ty:ty, $variant:ident) => {
+    ($push_method_name:ident, $as_method_name:ident, $as_mut_method_name:ident, $ty:ty, $variant:ident) => {
         pub fn $push_method_name(&mut self, time: u64, value: $ty) {
             match self {
                 TimeSeries::Uninit => {
@@ -91,9 +114,16 @@ macro_rules! gen_time_series_method {
             }
         }
 
-        pub fn $iter_method_name(&self) -> Option<impl Iterator<Item = &(u64, $ty)>> {
+        pub fn $as_method_name(&self) -> Option<&Vec<(u64, $ty)>> {
             match self {
-                TimeSeries::$variant(v) => Some(v.iter()),
+                TimeSeries::$variant(v) => Some(v),
+                _ => None,
+            }
+        }
+
+        pub fn $as_mut_method_name(&mut self) -> Option<&mut Vec<(u64, $ty)>> {
+            match self {
+                TimeSeries::$variant(v) => Some(v),
                 _ => None,
             }
         }
@@ -135,15 +165,15 @@ impl TimeSeries {
         }
     }
 
-    gen_time_series_method!(push_bool, as_bool, bool, Bool);
-    gen_time_series_method!(push_i8, as_i8, i8, I8);
-    gen_time_series_method!(push_i16, as_i16, i16, I16);
-    gen_time_series_method!(push_i32, as_i32, i32, I32);
-    gen_time_series_method!(push_i64, as_i64, i64, I64);
-    gen_time_series_method!(push_u8, as_u8, u8, U8);
-    gen_time_series_method!(push_u16, as_u16, u16, U16);
-    gen_time_series_method!(push_u32, as_u32, u32, U32);
-    gen_time_series_method!(push_u64, as_u64, u64, U64);
-    gen_time_series_method!(push_f32, as_f32, f32, F32);
-    gen_time_series_method!(push_f64, as_f64, f64, F64);
+    gen_time_series_method!(push_bool, as_bool, as_mut_bool, bool, Bool);
+    gen_time_series_method!(push_i8, as_i8, as_mut_i8, i8, I8);
+    gen_time_series_method!(push_i16, as_i16, as_mut_i16, i16, I16);
+    gen_time_series_method!(push_i32, as_i32, as_mut_i32, i32, I32);
+    gen_time_series_method!(push_i64, as_i64, as_mut_i64, i64, I64);
+    gen_time_series_method!(push_u8, as_u8, as_mut_u8, u8, U8);
+    gen_time_series_method!(push_u16, as_u16, as_mut_u16, u16, U16);
+    gen_time_series_method!(push_u32, as_u32, as_mut_u32, u32, U32);
+    gen_time_series_method!(push_u64, as_u64, as_mut_u64, u64, U64);
+    gen_time_series_method!(push_f32, as_f32, as_mut_f32, f32, F32);
+    gen_time_series_method!(push_f64, as_f64, as_mut_f64, f64, F64);
 }
