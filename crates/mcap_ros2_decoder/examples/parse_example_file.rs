@@ -58,10 +58,6 @@ fn parse_all_schemas(bytes: &[u8], decoder: &Decoder) {
     }
 }
 
-fn map_file(file_path: PathBuf) -> Vec<u8> {
-    std::fs::read(file_path).unwrap()
-}
-
 fn decode_multi_thread<S>(stream: S, decoder: &Decoder, storage: &mut DataStorage)
 where
     S: Iterator<Item = Message<'static>> + Send,
@@ -73,7 +69,7 @@ where
             |(decoder, mut storage), message| {
                 let channel = message.channel;
                 let schema = channel.schema.as_ref().unwrap();
-                let mut visitor = storage.insert(&channel.topic, message.publish_time);
+                let mut visitor = storage.new_visitor(&channel.topic, message.publish_time);
                 decoder
                     .decode(&schema.name, &schema.data, &message.data, &mut visitor)
                     .unwrap();
@@ -97,7 +93,7 @@ where
     stream.for_each(|message| {
         let channel = message.channel;
         let schema = channel.schema.as_ref().unwrap();
-        let mut visitor = storage.insert(&channel.topic, message.publish_time);
+        let mut visitor = storage.new_visitor(&channel.topic, message.publish_time);
         decoder
             .decode(&schema.name, &schema.data, &message.data, &mut visitor)
             .unwrap();
@@ -122,7 +118,10 @@ fn main() {
     let mut storage = DataStorage::new();
     let instant = std::time::Instant::now();
 
-    let all_bytes: Vec<_> = file_paths.into_iter().map(map_file).collect();
+    let all_bytes: Vec<_> = file_paths
+        .into_iter()
+        .map(|path| std::fs::read(path).unwrap())
+        .collect();
     for bytes in &all_bytes {
         parse_all_schemas(bytes, &decoder);
     }

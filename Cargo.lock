@@ -601,6 +601,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "delegate"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0ee5df75c70b95bd3aacc8e2fd098797692fb1d54121019c4de481e42f04c8a1"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "deranged"
 version = "0.3.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -734,6 +745,16 @@ dependencies = [
  "web-time",
  "webbrowser",
  "winit",
+]
+
+[[package]]
+name = "egui_autocomplete"
+version = "1.0.0"
+source = "git+https://github.com/JiangengDong/egui_autocomplete.git?branch=jiangeng/use-str-iterator#39de3e9ae3ce73ebc1c03f4d4f4dce7e893b973a"
+dependencies = [
+ "egui",
+ "fuzzy-matcher",
+ "serde",
 ]
 
 [[package]]
@@ -929,6 +950,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a62bc1cf6f830c2ec14a513a9fb124d0a213a629668a4186f329db21fe045652"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fuzzy-matcher"
+version = "0.3.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "54614a3312934d066701a80f20f15fa3b56d67ac7722b39eea5b4c9dd1d66c94"
+dependencies = [
+ "thread_local",
 ]
 
 [[package]]
@@ -1328,13 +1358,17 @@ dependencies = [
 name = "mcap-viewer"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "clap 4.4.6",
  "eframe",
  "egui",
+ "egui_autocomplete",
  "egui_dock",
  "egui_plot",
  "env_logger",
  "log",
  "mcap",
+ "mcap_decoder",
  "mcap_ros2_decoder",
  "mcap_viewer_storage",
  "serde",
@@ -1365,6 +1399,8 @@ dependencies = [
 name = "mcap_viewer_storage"
 version = "0.1.0"
 dependencies = [
+ "delegate",
+ "egui_plot",
  "hashbrown 0.14.1",
  "mcap_decoder",
 ]
@@ -2118,6 +2154,16 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.38",
+]
+
+[[package]]
+name = "thread_local"
+version = "1.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3fdd6f064ccff2d6567adcb3873ca630700f00b5ad3f060c25b5dcfd9a4ce152"
+dependencies = [
+ "cfg-if",
+ "once_cell",
 ]
 
 [[package]]

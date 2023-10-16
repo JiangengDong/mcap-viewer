@@ -1,85 +1,10 @@
+use std::path::Path;
+
 use egui::Frame;
 use egui_dock::{DockArea, DockState, Style};
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
-struct TabState {
-    pub id: usize,
-    pub title: String,
-    pub topic: String,
-    pub field: String,
-}
-
-struct TabViewer<'a> {
-    storage: &'a mcap_viewer_storage::DataStorage,
-}
-
-impl<'a> TabViewer<'a> {
-    fn new(storage: &'a mcap_viewer_storage::DataStorage) -> Self {
-        Self { storage }
-    }
-}
-
-impl egui_dock::TabViewer for TabViewer<'_> {
-    type Tab = TabState;
-
-    fn id(&mut self, tab: &mut Self::Tab) -> egui::Id {
-        egui::Id::new(tab.id)
-    }
-
-    fn title(&mut self, tab: &mut Self::Tab) -> egui::WidgetText {
-        if tab.title.is_empty() {
-            format!("Tab {}", tab.id).into()
-        } else {
-            tab.title.as_str().into()
-        }
-    }
-
-    fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        ui.collapsing("Settings", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Title");
-                ui.text_edit_singleline(&mut tab.title);
-                if ui.button("Add curve").clicked() {}
-            });
-            ui.horizontal(|ui| {
-                ui.label("Topic: ");
-                if !self.storage.0.contains_key(&tab.topic) {
-                    tab.topic.clear();
-                }
-                let all_topics = self.storage.0.keys();
-                egui::containers::ComboBox::from_id_source("topic")
-                    .selected_text(&tab.topic)
-                    .show_ui(ui, |ui| {
-                        for topic in all_topics {
-                            if ui.selectable_label(topic == &tab.topic, topic).clicked() {
-                                tab.topic.clone_from(topic);
-                            }
-                        }
-                    });
-                if let Some(selected_topic) = self.storage.0.get(&tab.topic) {
-                    ui.label("Field: ");
-                    if !selected_topic.0.contains_key(&tab.field) {
-                        tab.field.clear();
-                    }
-                    let all_fields = selected_topic.0.keys();
-                    egui::containers::ComboBox::from_id_source("field")
-                        .selected_text(&tab.field)
-                        .show_ui(ui, |ui| {
-                            for field in all_fields {
-                                if ui.selectable_label(field == &tab.field, field).clicked() {
-                                    tab.field.clone_from(field);
-                                }
-                            }
-                        });
-                }
-            });
-        });
-    }
-
-    fn allowed_in_windows(&self, _tab: &mut Self::Tab) -> bool {
-        false
-    }
-}
+use crate::loader;
+use crate::tab::{LinePlot, Viewer};
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -90,40 +15,14 @@ pub struct McapViewer {
 
     /// The number of tabs created. This may overflow after a long time, but I don't want to think about it now.
     tab_monotonic_counter: usize,
-    tree: DockState<TabState>,
-}
-
-impl McapViewer {
-    fn new_tab(&mut self) -> TabState {
-        let tab = TabState {
-            id: self.tab_monotonic_counter,
-            ..Default::default()
-        };
-        self.tab_monotonic_counter += 1;
-        tab
-    }
+    tree: DockState<LinePlot>,
 }
 
 impl Default for McapViewer {
     fn default() -> Self {
-        let mut storage = mcap_viewer_storage::DataStorage::default();
-        storage
-            .0
-            .entry("topic1".to_owned())
-            .or_default()
-            .0
-            .entry("field1".to_owned())
-            .or_default();
-        storage
-            .0
-            .entry("topic2".to_owned())
-            .or_default()
-            .0
-            .entry("field2".to_owned())
-            .or_default();
         Self {
-            storage,
-            tree: DockState::new(vec![TabState::default()]),
+            storage: mcap_viewer_storage::DataStorage::default(),
+            tree: DockState::new(vec![LinePlot::default()]),
             tab_monotonic_counter: 1,
         }
     }
@@ -144,6 +43,46 @@ impl McapViewer {
 
         Self::default()
     }
+
+    /// Load all mcap files from a directory or a single file, and start the viewer with the data.
+    pub fn from_path<P: AsRef<Path>>(
+        cc: &eframe::CreationContext<'_>,
+        path: P,
+    ) -> anyhow::Result<Self> {
+        let default = Self::new(cc);
+
+        let all_paths = loader::list_all_mcap_files(path.as_ref());
+        let mut storage = mcap_viewer_storage::DataStorage::default();
+        let decoder = mcap_ros2_decoder::Decoder::default();
+        for path in all_paths {
+            let bytes = std::fs::read(path)?;
+            loader::parse_all_schemas(&bytes, &decoder);
+            loader::decode_single_thread(&bytes, &decoder, &mut storage);
+        }
+        Ok(Self { storage, ..default })
+    }
+
+    fn new_tab(&mut self) -> LinePlot {
+        let tab = LinePlot::new(self.tab_monotonic_counter);
+        self.tab_monotonic_counter += 1;
+        tab
+    }
+
+    fn commit_added_tabs(
+        &mut self,
+        added_tabs: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex)>,
+    ) {
+        for (surface, node) in added_tabs {
+            self.tree.set_focused_node_and_surface((surface, node));
+            let tab = self.new_tab();
+            self.tree.push_to_focused_leaf(tab);
+        }
+
+        if self.tree.main_surface().is_empty() {
+            let tab = self.new_tab();
+            self.tree.main_surface_mut().push_to_first_leaf(tab);
+        }
+    }
 }
 
 impl eframe::App for McapViewer {
@@ -157,10 +96,12 @@ impl eframe::App for McapViewer {
         egui::CentralPanel::default()
             .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
             .show(ctx, |ui| {
+                let mut viewer = Viewer::new(&self.storage);
                 DockArea::new(&mut self.tree)
                     .style(Style::from_egui(ctx.style().as_ref()))
                     .show_add_buttons(true)
-                    .show_inside(ui, &mut TabViewer::new(&self.storage));
+                    .show_inside(ui, &mut viewer);
+                self.commit_added_tabs(viewer.into_added_tabs());
 
                 if cfg!(debug_assertions) {
                     ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
@@ -169,10 +110,6 @@ impl eframe::App for McapViewer {
                     });
                 }
             });
-        if self.tree.main_surface().is_empty() {
-            let tab = self.new_tab();
-            self.tree.main_surface_mut().push_to_first_leaf(tab);
-        }
     }
 }
 

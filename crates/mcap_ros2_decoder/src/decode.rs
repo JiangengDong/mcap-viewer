@@ -90,7 +90,9 @@ where
         let new_field_path_len = field_path.len();
         #[allow(clippy::needless_range_loop)]
         for i in 0..size {
-            push_index(field_path, i);
+            if field.repitition != crate::schema::Repitition::Single {
+                push_index(field_path, i);
+            }
             match &field.ty {
                 crate::schema::Type::Bool => visitor
                     .visit_bool(field_path, reader.bool())
@@ -132,7 +134,9 @@ where
                     decode_inner(msg_schema, reader, visitor, field_path)?;
                 }
             }
-            field_path.truncate(new_field_path_len);
+            if field.repitition != crate::schema::Repitition::Single {
+                field_path.truncate(new_field_path_len);
+            }
         }
         field_path.truncate(old_field_path_len);
     }

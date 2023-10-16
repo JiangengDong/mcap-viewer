@@ -34,6 +34,10 @@ env_logger = "0.10"
 mcap = { version = "0.7.2", path = "crates/mcap" }
 mcap_ros2_decoder = { version = "0.1", path = "crates/mcap_ros2_decoder" }
 mcap_viewer_storage = { version = "0.1.0", path = "crates/mcap_viewer_storage" }
+mcap_decoder = { version = "0.1.0", path = "crates/mcap_decoder" }
+anyhow = "1.0.75"
+egui_autocomplete = { version = "1.0.0", features = ["serde"] }
+clap = { version = "4.4.6", features = ["derive"] }
 
 [profile.release]
 opt-level = 3
@@ -46,3 +50,6 @@ opt-level = 3
 
 [profile.bench]
 debug = true
+
+[patch.crates-io]
+egui_autocomplete = { git = "https://github.com/JiangengDong/egui_autocomplete.git", branch = "jiangeng/use-str-iterator" }

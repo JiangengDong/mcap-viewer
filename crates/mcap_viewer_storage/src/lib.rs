@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 
 #[derive(Debug, Default)]
-pub struct DataStorage(pub HashMap<String, TopicStorage>);
+pub struct DataStorage(HashMap<String, TopicStorage>);
 
 impl DataStorage {
     #[must_use]
@@ -9,7 +9,7 @@ impl DataStorage {
         Self(HashMap::default())
     }
 
-    pub fn insert(&mut self, topic: &str, timestamp: u64) -> Visitor<'_> {
+    pub fn new_visitor(&mut self, topic: &str, timestamp: u64) -> Visitor<'_> {
         let topic_storage = self.0.entry(topic.to_owned()).or_default();
         Visitor {
             storage: topic_storage,
@@ -45,10 +45,19 @@ impl DataStorage {
             topic_storage.sort_unstable();
         }
     }
+
+    delegate::delegate!(
+        to self.0 {
+            pub fn get(&self, topic: &str) -> Option<&TopicStorage>;
+            pub fn get_mut(&mut self, topic: &str) -> Option<&mut TopicStorage>;
+            pub fn contains_key(&self, topic: &str) -> bool;
+            pub fn keys(&self) -> hashbrown::hash_map::Keys<'_, String, TopicStorage>;
+        }
+    );
 }
 
 #[derive(Debug, Default)]
-pub struct TopicStorage(pub HashMap<String, TimeSeries>);
+pub struct TopicStorage(HashMap<String, TimeSeries>);
 
 impl TopicStorage {
     #[must_use]
@@ -61,6 +70,15 @@ impl TopicStorage {
             time_series.sort_unstable();
         }
     }
+
+    delegate::delegate!(
+        to self.0 {
+            pub fn get(&self, field: &str) -> Option<&TimeSeries>;
+            pub fn get_mut(&mut self, field: &str) -> Option<&mut TimeSeries>;
+            pub fn contains_key(&self, field: &str) -> bool;
+            pub fn keys(&self) -> hashbrown::hash_map::Keys<'_, String, TimeSeries>;
+        }
+    );
 }
 
 pub struct Visitor<'a> {
@@ -99,7 +117,7 @@ impl mcap_decoder::Visitor for Visitor<'_> {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub enum TimeSeries {
     #[default]
     Uninit,
@@ -216,4 +234,50 @@ impl TimeSeries {
     gen_time_series_method!(push_u64, as_u64, as_mut_u64, u64, U64);
     gen_time_series_method!(push_f32, as_f32, as_mut_f32, f32, F32);
     gen_time_series_method!(push_f64, as_f64, as_mut_f64, f64, F64);
+}
+
+#[cfg(feature = "egui_plot")]
+impl From<TimeSeries> for egui_plot::PlotPoints {
+    fn from(value: TimeSeries) -> Self {
+        match value {
+            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Bool(v) => v
+                .into_iter()
+                .map(|(x, y)| [x as f64, y as u8 as f64])
+                .collect(),
+            TimeSeries::I8(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::I16(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::I32(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::I64(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::U8(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::U16(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::U32(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::U64(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::F32(v) => v.into_iter().map(|(x, y)| [x as f64, y as f64]).collect(),
+            TimeSeries::F64(v) => v.into_iter().map(|(x, y)| [x as f64, y]).collect(),
+        }
+    }
+}
+
+#[cfg(feature = "egui_plot")]
+impl From<&TimeSeries> for egui_plot::PlotPoints {
+    fn from(value: &TimeSeries) -> Self {
+        match value {
+            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Bool(v) => v
+                .iter()
+                .map(|(x, y)| [*x as f64, *y as u8 as f64])
+                .collect(),
+            TimeSeries::I8(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::I16(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::I32(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::I64(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::U8(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::U16(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::U32(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::U64(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::F32(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
+            TimeSeries::F64(v) => v.iter().map(|(x, y)| [*x as f64, *y]).collect(),
+        }
+    }
 }
