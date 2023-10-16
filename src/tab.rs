@@ -1,6 +1,8 @@
+use std::ops::RangeInclusive;
+
 use egui::Color32;
 use egui_autocomplete::AutoCompleteTextEdit;
-use egui_plot::{Legend, Line, Points};
+use egui_plot::{Legend, Line, PlotPoint, Points};
 use mcap_viewer_storage::DataStorage;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
@@ -89,7 +91,9 @@ impl LinePlot {
             .link_axis("time_axis", true, false)
             .link_cursor("time_cursor", true, false)
             .auto_bounds_x()
-            .auto_bounds_y();
+            .auto_bounds_y()
+            .x_axis_formatter(Self::x_label)
+            .label_formatter(Self::format_label);
 
         let plot = if self.show_legend {
             plot.legend(Legend::default())
@@ -109,6 +113,30 @@ impl LinePlot {
                 }
             }
         });
+    }
+
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_precision_loss,
+        clippy::needless_pass_by_value
+    )]
+    fn x_label(value: f64, _limit: usize, _range: &RangeInclusive<f64>) -> String {
+        let timestamp = (value / 1000.0) as i64;
+        if let Some(timestamp) = chrono::NaiveDateTime::from_timestamp_micros(timestamp) {
+            timestamp.to_string()
+        } else {
+            timestamp.to_string()
+        }
+    }
+
+    #[allow(clippy::cast_possible_truncation)]
+    fn format_label(_series_name: &str, point: &PlotPoint) -> String {
+        let timestamp = (point.x / 1000.0) as i64;
+        if let Some(timestamp) = chrono::NaiveDateTime::from_timestamp_micros(timestamp) {
+            format!("x:{}\ny:{}", timestamp, point.y)
+        } else {
+            format!("x:{}\ny:{}", point.x, point.y)
+        }
     }
 }
 
