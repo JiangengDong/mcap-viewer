@@ -1,15 +1,16 @@
 use std::path::{Path, PathBuf};
 
-use egui::{Align2, Frame, Layout};
+use egui::{Align2, Color32, Frame, Id, LayerId, Order, TextStyle};
 use egui_dock::{DockArea, DockState, Style};
+use std::fmt::Write as _;
 
 use crate::loader;
 use crate::tab::{LinePlot, Viewer};
 
 enum FileOperation {
     None,
-    Loading(PathBuf),
-    Loaded(PathBuf),
+    Loading(Vec<PathBuf>),
+    Loaded(Vec<PathBuf>),
 }
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
@@ -60,7 +61,7 @@ impl McapViewer {
     ) -> anyhow::Result<Self> {
         let default = Self::new(cc);
 
-        let mut all_paths = loader::list_all_mcap_files(path.as_ref());
+        let all_paths = loader::list_all_mcap_files(path.as_ref());
         let mut storage = mcap_viewer_storage::DataStorage::default();
         let decoder = mcap_ros2_decoder::Decoder::default();
         for path in &all_paths {
@@ -68,9 +69,11 @@ impl McapViewer {
             loader::parse_all_schemas(&bytes, &decoder);
             loader::decode_single_thread(&bytes, &decoder, &mut storage);
         }
-        let file_operation = all_paths
-            .pop()
-            .map_or(FileOperation::None, FileOperation::Loaded);
+        let file_operation = if all_paths.is_empty() {
+            FileOperation::None
+        } else {
+            FileOperation::Loaded(all_paths)
+        };
         Ok(Self {
             storage,
             file_operation,
@@ -120,11 +123,6 @@ impl eframe::App for McapViewer {
             });
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
             ui.horizontal(|ui| {
-                if ui.button("load file").clicked() {
-                    if let Some(path) = rfd::FileDialog::new().pick_file() {
-                        self.file_operation = FileOperation::Loading(path);
-                    }
-                }
                 egui::ComboBox::from_label("Layout")
                     .selected_text("")
                     .show_ui(ui, |ui| {});
@@ -135,10 +133,18 @@ impl eframe::App for McapViewer {
                 FileOperation::None => {}
                 FileOperation::Loading(path) => {
                     ui.spinner();
-                    ui.label(format!("Loading {}", path.display()));
+                    if path.len() == 1 {
+                        ui.label(format!("Loading {}", path[0].display()));
+                    } else {
+                        ui.label(format!("Loading {} files", path.len()));
+                    }
                 }
                 FileOperation::Loaded(path) => {
-                    ui.label(format!("Loaded {}", path.display()));
+                    if path.len() == 1 {
+                        ui.label(format!("Loaded {}", path[0].display()));
+                    } else {
+                        ui.label(format!("Loaded {} files", path.len()));
+                    }
                 }
             });
         });
@@ -152,6 +158,46 @@ impl eframe::App for McapViewer {
                     .show_inside(ui, &mut viewer);
                 self.commit_added_tabs(viewer.into_added_tabs());
             });
+        ctx.input(|i| {
+            if !i.raw.dropped_files.is_empty() {
+                self.file_operation = FileOperation::Loading(
+                    i.raw
+                        .dropped_files
+                        .iter()
+                        .filter_map(|s| s.path.clone())
+                        .collect(),
+                );
+            }
+        });
+
+        if !ctx.input(|i| i.raw.hovered_files.is_empty()) {
+            let text = ctx.input(|i| {
+                let mut text = "Dropping files:\n".to_owned();
+                for file in &i.raw.hovered_files {
+                    if let Some(path) = &file.path {
+                        write!(text, "\n{}", path.display()).ok();
+                    } else if !file.mime.is_empty() {
+                        write!(text, "\n{}", file.mime).ok();
+                    } else {
+                        text += "\n???";
+                    }
+                }
+                text
+            });
+
+            let painter =
+                ctx.layer_painter(LayerId::new(Order::Foreground, Id::new("file_drop_target")));
+
+            let screen_rect = ctx.screen_rect();
+            painter.rect_filled(screen_rect, 0.0, Color32::from_black_alpha(192));
+            painter.text(
+                screen_rect.center(),
+                Align2::CENTER_CENTER,
+                text,
+                TextStyle::Heading.resolve(&ctx.style()),
+                Color32::WHITE,
+            );
+        }
     }
 }
 
