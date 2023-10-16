@@ -1,10 +1,16 @@
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
-use egui::Frame;
+use egui::{Align2, Frame, Layout};
 use egui_dock::{DockArea, DockState, Style};
 
 use crate::loader;
 use crate::tab::{LinePlot, Viewer};
+
+enum FileOperation {
+    None,
+    Loading(PathBuf),
+    Loaded(PathBuf),
+}
 
 /// We derive Deserialize/Serialize so we can persist app state on shutdown.
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -12,6 +18,8 @@ use crate::tab::{LinePlot, Viewer};
 pub struct McapViewer {
     #[serde(skip)] // This how you opt-out of serialization of a field
     storage: mcap_viewer_storage::DataStorage,
+    #[serde(skip)]
+    file_operation: FileOperation,
 
     /// The number of tabs created. This may overflow after a long time, but I don't want to think about it now.
     tab_monotonic_counter: usize,
@@ -22,6 +30,7 @@ impl Default for McapViewer {
     fn default() -> Self {
         Self {
             storage: mcap_viewer_storage::DataStorage::default(),
+            file_operation: FileOperation::None,
             tree: DockState::new(vec![LinePlot::default()]),
             tab_monotonic_counter: 1,
         }
@@ -51,15 +60,22 @@ impl McapViewer {
     ) -> anyhow::Result<Self> {
         let default = Self::new(cc);
 
-        let all_paths = loader::list_all_mcap_files(path.as_ref());
+        let mut all_paths = loader::list_all_mcap_files(path.as_ref());
         let mut storage = mcap_viewer_storage::DataStorage::default();
         let decoder = mcap_ros2_decoder::Decoder::default();
-        for path in all_paths {
+        for path in &all_paths {
             let bytes = std::fs::read(path)?;
             loader::parse_all_schemas(&bytes, &decoder);
             loader::decode_single_thread(&bytes, &decoder, &mut storage);
         }
-        Ok(Self { storage, ..default })
+        let file_operation = all_paths
+            .pop()
+            .map_or(FileOperation::None, FileOperation::Loaded);
+        Ok(Self {
+            storage,
+            file_operation,
+            ..default
+        })
     }
 
     fn new_tab(&mut self) -> LinePlot {
@@ -93,6 +109,39 @@ impl eframe::App for McapViewer {
 
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::Area::new("power by")
+            .pivot(Align2::RIGHT_BOTTOM)
+            .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
+            .movable(false)
+            .interactable(false)
+            .show(ctx, |ui| {
+                egui::warn_if_debug_build(ui);
+                powered_by_egui_and_eframe(ui);
+            });
+        egui::TopBottomPanel::top("menu").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                if ui.button("load file").clicked() {
+                    if let Some(path) = rfd::FileDialog::new().pick_file() {
+                        self.file_operation = FileOperation::Loading(path);
+                    }
+                }
+                egui::ComboBox::from_label("Layout")
+                    .selected_text("")
+                    .show_ui(ui, |ui| {});
+            });
+        });
+        egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
+            ui.horizontal(|ui| match &self.file_operation {
+                FileOperation::None => {}
+                FileOperation::Loading(path) => {
+                    ui.spinner();
+                    ui.label(format!("Loading {}", path.display()));
+                }
+                FileOperation::Loaded(path) => {
+                    ui.label(format!("Loaded {}", path.display()));
+                }
+            });
+        });
         egui::CentralPanel::default()
             .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
             .show(ctx, |ui| {
@@ -102,13 +151,6 @@ impl eframe::App for McapViewer {
                     .show_add_buttons(true)
                     .show_inside(ui, &mut viewer);
                 self.commit_added_tabs(viewer.into_added_tabs());
-
-                if cfg!(debug_assertions) {
-                    ui.with_layout(egui::Layout::bottom_up(egui::Align::LEFT), |ui| {
-                        powered_by_egui_and_eframe(ui);
-                        egui::warn_if_debug_build(ui);
-                    });
-                }
             });
     }
 }
