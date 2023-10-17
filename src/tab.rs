@@ -2,7 +2,7 @@ use std::ops::RangeInclusive;
 
 use egui::Color32;
 use egui_autocomplete::AutoCompleteTextEdit;
-use egui_plot::{Legend, Line, PlotPoint, Points};
+use egui_plot::{Corner, Legend, Line, PlotPoint, Points};
 use mcap_viewer_storage::DataStorage;
 
 #[derive(serde::Deserialize, serde::Serialize, Default)]
@@ -19,7 +19,9 @@ pub struct LinePlot {
     pub id: usize,
     pub title: String,
     pub curves: Vec<Curve>,
-    pub show_legend: bool,
+
+    #[serde(skip)]
+    pub legend_corner: Option<Corner>,
 }
 
 impl LinePlot {
@@ -51,9 +53,7 @@ impl LinePlot {
                         keep[i] = false;
                     }
 
-                    let mut color_array = [curve.color.r(), curve.color.g(), curve.color.b()];
-                    ui.color_edit_button_srgb(&mut color_array);
-                    curve.color = Color32::from_rgb(color_array[0], color_array[1], color_array[2]);
+                    ui.color_edit_button_srgba(&mut curve.color);
 
                     let all_topics = storage.keys();
                     ui.add(
@@ -75,14 +75,28 @@ impl LinePlot {
                                     text.clip_text(false).hint_text("field")
                                 }),
                         );
-                    } else {
-                        curve.field.clear();
                     }
                 });
             }
             let mut keep_iter = keep.into_iter();
             self.curves.retain(|_| keep_iter.next().unwrap());
-            ui.checkbox(&mut self.show_legend, "Show legend");
+
+            ui.horizontal(|ui| {
+                ui.label("Legend position: ");
+                ui.selectable_value(
+                    &mut self.legend_corner,
+                    Some(Corner::LeftBottom),
+                    "left bottom",
+                );
+                ui.selectable_value(&mut self.legend_corner, Some(Corner::LeftTop), "left top");
+                ui.selectable_value(
+                    &mut self.legend_corner,
+                    Some(Corner::RightBottom),
+                    "right bottom",
+                );
+                ui.selectable_value(&mut self.legend_corner, Some(Corner::RightTop), "right top");
+                ui.selectable_value(&mut self.legend_corner, None, "none");
+            })
         });
     }
 
@@ -95,8 +109,8 @@ impl LinePlot {
             .x_axis_formatter(Self::x_label)
             .label_formatter(Self::format_label);
 
-        let plot = if self.show_legend {
-            plot.legend(Legend::default())
+        let plot = if let Some(corner) = self.legend_corner {
+            plot.legend(Legend::default().position(corner))
         } else {
             plot
         };

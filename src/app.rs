@@ -27,8 +27,12 @@ pub struct McapViewer {
 
     /// The number of tabs created. This may overflow after a long time, but I don't want to think about it now.
     tab_monotonic_counter: usize,
+
+    /// The name of the active layout.
     active_layout_name: String,
+    /// The name of the new layout to be created.
     new_layout_name: String,
+    /// All the layouts.
     layouts: HashMap<String, DockState<LinePlot>>,
 }
 
@@ -73,17 +77,19 @@ impl McapViewer {
         Ok(obj)
     }
 
+    fn new_tab(tab_counter: &mut usize) -> LinePlot {
+        *tab_counter += 1;
+        LinePlot::new(*tab_counter)
+    }
+
     fn commit_added_tabs(
-        &mut self,
+        tree: &mut DockState<LinePlot>,
+        tab_counter: &mut usize,
         added_tabs: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex)>,
     ) {
-        let Some(tree) = self.layouts.get_mut(&self.active_layout_name) else {
-            return;
-        };
         for (surface, node) in added_tabs {
+            let tab = Self::new_tab(tab_counter);
             tree.set_focused_node_and_surface((surface, node));
-            let tab = LinePlot::new(self.tab_monotonic_counter);
-            self.tab_monotonic_counter += 1;
             tree.push_to_focused_leaf(tab);
         }
     }
@@ -112,6 +118,57 @@ impl McapViewer {
             other => other,
         }
     }
+
+    fn layout_menu(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Layout: ");
+            egui::ComboBox::from_id_source("Layout")
+                .selected_text(&self.active_layout_name)
+                .show_ui(ui, |ui| {
+                    let mut removed_layouts = Vec::new();
+                    for layout in self.layouts.keys() {
+                        ui.horizontal(|ui| {
+                            if ui.button("-").clicked() {
+                                removed_layouts.push(layout.clone());
+                            }
+                            if ui
+                                .selectable_label(self.active_layout_name == *layout, layout)
+                                .clicked()
+                            {
+                                self.active_layout_name = layout.clone();
+                            }
+                        });
+                    }
+                    for layout in removed_layouts {
+                        self.layouts.remove(&layout);
+                    }
+                });
+
+            ui.label("New layout: ");
+            if ui
+                .text_edit_singleline(&mut self.new_layout_name)
+                .lost_focus()
+                && ui.input(|i| i.key_pressed(egui::Key::Enter))
+                && !self.new_layout_name.is_empty()
+            {
+                self.layouts
+                    .entry(self.new_layout_name.clone())
+                    .or_insert_with(|| DockState::new(vec![]));
+                self.active_layout_name = std::mem::take(&mut self.new_layout_name);
+            }
+        });
+
+        // ensure there is at least one layout
+        if self.layouts.is_empty() {
+            self.layouts
+                .insert("Default".to_owned(), DockState::new(vec![]));
+        }
+
+        // ensure active layout is valid
+        if !self.layouts.contains_key(&self.active_layout_name) {
+            self.active_layout_name = self.layouts.keys().next().cloned().unwrap_or_default();
+        }
+    }
 }
 
 impl eframe::App for McapViewer {
@@ -123,66 +180,13 @@ impl eframe::App for McapViewer {
     /// Called each time the UI needs repainting, which may be many times per second.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.try_finish_loading();
-        egui::Area::new("power by")
-            .pivot(Align2::RIGHT_BOTTOM)
-            .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
-            .movable(false)
-            .interactable(false)
-            .show(ctx, |ui| {
-                egui::warn_if_debug_build(ui);
-                powered_by_egui_and_eframe(ui);
-            });
+
+        powered_by_egui_and_eframe_overlay(ctx);
+
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Layout: ");
-                egui::ComboBox::from_id_source("Layout")
-                    .selected_text(&self.active_layout_name)
-                    .show_ui(ui, |ui| {
-                        let mut removed_layouts = Vec::new();
-                        for layout in self.layouts.keys() {
-                            ui.horizontal(|ui| {
-                                if ui.button("-").clicked() {
-                                    removed_layouts.push(layout.clone());
-                                }
-                                if ui
-                                    .selectable_label(self.active_layout_name == *layout, layout)
-                                    .clicked()
-                                {
-                                    self.active_layout_name = layout.clone();
-                                }
-                            });
-                        }
-                        for layout in removed_layouts {
-                            self.layouts.remove(&layout);
-                        }
-                    });
-
-                ui.label("New layout: ");
-                if ui
-                    .text_edit_singleline(&mut self.new_layout_name)
-                    .lost_focus()
-                    && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                    && !self.new_layout_name.is_empty()
-                {
-                    self.layouts
-                        .entry(self.new_layout_name.clone())
-                        .or_insert_with(|| {
-                            let new_layout =
-                                DockState::new(vec![LinePlot::new(self.tab_monotonic_counter)]);
-                            self.tab_monotonic_counter += 1;
-                            new_layout
-                        });
-                    self.active_layout_name = std::mem::take(&mut self.new_layout_name);
-                }
-
-                if !self.active_layout_name.is_empty()
-                    && !self.layouts.contains_key(&self.active_layout_name)
-                {
-                    self.active_layout_name =
-                        self.layouts.keys().next().cloned().unwrap_or_default();
-                }
-            });
+            self.layout_menu(ui);
         });
+
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
             ui.horizontal(|ui| match &self.file_operation {
                 FileOperation::None => {}
@@ -203,19 +207,31 @@ impl eframe::App for McapViewer {
                 }
             });
         });
+
         egui::CentralPanel::default()
             .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
             .show(ctx, |ui| {
                 let mut viewer = Viewer::new(&self.storage);
                 let Some(tree) = self.layouts.get_mut(&self.active_layout_name) else {
+                    log::warn!("Cannot find layout {}", self.active_layout_name);
                     return;
                 };
+
                 DockArea::new(tree)
                     .style(Style::from_egui(ctx.style().as_ref()))
                     .show_add_buttons(true)
                     .show_inside(ui, &mut viewer);
-                self.commit_added_tabs(viewer.into_added_tabs());
-                // TODO: ensure main surface has at least one tab
+
+                Self::commit_added_tabs(
+                    tree,
+                    &mut self.tab_monotonic_counter,
+                    viewer.into_added_tabs(),
+                );
+
+                if tree.main_surface().is_empty() {
+                    tree.main_surface_mut()
+                        .push_to_first_leaf(Self::new_tab(&mut self.tab_monotonic_counter));
+                }
             });
 
         preview_hovered_files(ctx);
@@ -226,6 +242,29 @@ impl eframe::App for McapViewer {
             }
         });
     }
+}
+
+fn powered_by_egui_and_eframe_overlay(ctx: &egui::Context) {
+    egui::Area::new("power by")
+        .pivot(Align2::RIGHT_BOTTOM)
+        .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
+        .movable(false)
+        .interactable(false)
+        .show(ctx, |ui| {
+            egui::warn_if_debug_build(ui);
+
+            ui.horizontal(|ui| {
+                ui.spacing_mut().item_spacing.x = 0.0;
+                ui.label("Powered by ");
+                ui.hyperlink_to("egui", "https://github.com/emilk/egui");
+                ui.label(" and ");
+                ui.hyperlink_to(
+                    "eframe",
+                    "https://github.com/emilk/egui/tree/master/crates/eframe",
+                );
+                ui.label(".");
+            });
+        });
 }
 
 fn preview_hovered_files(ctx: &egui::Context) {
@@ -257,18 +296,4 @@ fn preview_hovered_files(ctx: &egui::Context) {
             Color32::WHITE,
         );
     }
-}
-
-fn powered_by_egui_and_eframe(ui: &mut egui::Ui) {
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing.x = 0.0;
-        ui.label("Powered by ");
-        ui.hyperlink_to("egui", "https://github.com/emilk/egui");
-        ui.label(" and ");
-        ui.hyperlink_to(
-            "eframe",
-            "https://github.com/emilk/egui/tree/master/crates/eframe",
-        );
-        ui.label(".");
-    });
 }

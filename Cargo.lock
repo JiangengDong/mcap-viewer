@@ -788,8 +788,9 @@ dependencies = [
 
 [[package]]
 name = "egui_autocomplete"
-version = "1.0.0"
-source = "git+https://github.com/JiangengDong/egui_autocomplete.git?branch=jiangeng/use-str-iterator#39de3e9ae3ce73ebc1c03f4d4f4dce7e893b973a"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "15d6fdc71091583105720914abe743dde76efca3a48007d6570d3b34dbaf10bc"
 dependencies = [
  "egui",
  "fuzzy-matcher",
