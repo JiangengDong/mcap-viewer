@@ -39,6 +39,8 @@ anyhow = "1.0.75"
 egui_autocomplete = { version = "1.0.0", features = ["serde"] }
 clap = { version = "4.4.6", features = ["derive"] }
 chrono = "0.4.31"
+crossbeam-channel = "0.5.8"
+rayon = "1.8.0"
 
 [profile.release]
 opt-level = 3
