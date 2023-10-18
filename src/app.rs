@@ -129,7 +129,11 @@ impl McapViewer {
                     let mut removed_layouts = Vec::new();
                     for layout in self.layouts.keys() {
                         ui.horizontal(|ui| {
-                            if ui.add(IconButton::Close).clicked() {
+                            if ui
+                                .add(IconButton::Close)
+                                .on_hover_text("Remove layout")
+                                .clicked()
+                            {
                                 removed_layouts.push(layout.clone());
                             }
                             if ui
