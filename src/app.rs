@@ -219,7 +219,10 @@ impl eframe::App for McapViewer {
         powered_by_egui_and_eframe_overlay(ctx);
 
         egui::TopBottomPanel::top("menu").show(ctx, |ui| {
-            self.layout_menu(ui);
+            ui.horizontal(|ui| {
+                self.layout_menu(ui);
+                egui::widgets::global_dark_light_mode_buttons(ui);
+            });
         });
 
         egui::TopBottomPanel::bottom("status").show(ctx, |ui| {
