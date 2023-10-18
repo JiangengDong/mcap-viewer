@@ -1,4 +1,4 @@
-use std::ops::RangeInclusive;
+use std::{ops::RangeInclusive, sync::atomic::AtomicUsize};
 
 use egui::{Color32, Id};
 use egui_autocomplete::AutoCompleteTextEdit;
@@ -6,6 +6,8 @@ use egui_plot::{Corner, Legend, Line, PlotPoint, Points};
 use mcap_viewer_storage::DataStorage;
 
 use crate::utils::IconButton;
+
+static TAB_MONOTONIC_ID: AtomicUsize = AtomicUsize::new(0);
 
 #[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(default)]
@@ -25,27 +27,107 @@ impl Default for Curve {
     }
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
-#[serde(default)]
+mod line_plot_serde {
+
+    use std::sync::atomic::Ordering;
+
+    use super::TAB_MONOTONIC_ID;
+
+    use super::LinePlot;
+
+    use super::Curve;
+
+    #[derive(serde::Deserialize, Default)]
+    #[serde(default)]
+    struct LinePlotDeProxy {
+        title: String,
+        curves: Vec<Curve>,
+        show_settings: bool,
+    }
+
+    #[derive(serde::Serialize, Default)]
+    #[serde(default)]
+    struct LinePlotSerProxy<'a> {
+        title: &'a str,
+        curves: &'a [Curve],
+        show_settings: bool,
+    }
+
+    impl From<LinePlotDeProxy> for LinePlot {
+        fn from(value: LinePlotDeProxy) -> Self {
+            let LinePlotDeProxy {
+                title,
+                curves,
+                show_settings,
+            } = value;
+            Self {
+                id: TAB_MONOTONIC_ID.fetch_add(1, Ordering::Relaxed),
+                title,
+                curves,
+                show_settings,
+                legend_corner: None,
+            }
+        }
+    }
+
+    impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
+        fn from(value: &'a LinePlot) -> Self {
+            let LinePlot {
+                title,
+                curves,
+                show_settings,
+                ..
+            } = value;
+            Self {
+                title,
+                curves,
+                show_settings: *show_settings,
+            }
+        }
+    }
+
+    impl serde::Serialize for LinePlot {
+        fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+        {
+            let proxy = LinePlotSerProxy::from(self);
+            proxy.serialize(serializer)
+        }
+    }
+
+    impl<'de> serde::Deserialize<'de> for LinePlot {
+        fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where
+            D: serde::Deserializer<'de>,
+        {
+            let proxy = LinePlotDeProxy::deserialize(deserializer)?;
+            Ok(LinePlot::from(proxy))
+        }
+    }
+}
+
+#[derive(Default, Clone)]
 pub struct LinePlot {
-    pub id: usize,
+    id: usize,
     pub title: String,
     pub curves: Vec<Curve>,
-
-    #[serde(skip)]
+    pub show_settings: bool,
     pub legend_corner: Option<Corner>,
 }
 
 impl LinePlot {
-    pub fn new(id: usize) -> Self {
+    pub fn new() -> Self {
         Self {
-            id,
+            id: TAB_MONOTONIC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
             ..Default::default()
         }
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
-        self.menu(ui, storage);
+        if self.show_settings {
+            self.menu(ui, storage);
+        }
         self.plot(ui, storage);
     }
 
@@ -249,6 +331,22 @@ impl egui_dock::TabViewer for Viewer<'_> {
 
     fn on_add(&mut self, surface: egui_dock::SurfaceIndex, node: egui_dock::NodeIndex) {
         self.added_tabs.push((surface, node));
+    }
+
+    fn context_menu(
+        &mut self,
+        ui: &mut egui::Ui,
+        tab: &mut Self::Tab,
+        _surface: egui_dock::SurfaceIndex,
+        _node: egui_dock::NodeIndex,
+    ) {
+        if tab.show_settings {
+            if ui.button("hide settings").clicked() {
+                tab.show_settings = false;
+            }
+        } else if ui.button("show settings").clicked() {
+            tab.show_settings = true;
+        }
     }
 }
 

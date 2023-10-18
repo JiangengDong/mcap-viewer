@@ -26,9 +26,6 @@ pub struct McapViewer {
     #[serde(skip)]
     loader: loader::Loader,
 
-    /// The number of tabs created. This may overflow after a long time, but I don't want to think about it now.
-    tab_monotonic_counter: usize,
-
     /// The name of the active layout.
     active_layout_name: String,
     /// The name of the new layout to be created.
@@ -43,7 +40,6 @@ impl Default for McapViewer {
             storage: mcap_viewer_storage::DataStorage::default(),
             file_operation: FileOperation::None,
             loader: loader::Loader::new(),
-            tab_monotonic_counter: 0,
             active_layout_name: String::new(),
             new_layout_name: String::new(),
             layouts: BTreeMap::new(),
@@ -78,20 +74,13 @@ impl McapViewer {
         Ok(obj)
     }
 
-    fn new_tab(tab_counter: &mut usize) -> LinePlot {
-        *tab_counter += 1;
-        LinePlot::new(*tab_counter)
-    }
-
     fn commit_added_tabs(
         tree: &mut DockState<LinePlot>,
-        tab_counter: &mut usize,
         added_tabs: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex)>,
     ) {
         for (surface, node) in added_tabs {
-            let tab = Self::new_tab(tab_counter);
             tree.set_focused_node_and_surface((surface, node));
-            tree.push_to_focused_leaf(tab);
+            tree.push_to_focused_leaf(LinePlot::new());
         }
     }
 
@@ -260,15 +249,10 @@ impl eframe::App for McapViewer {
                     .show_add_buttons(true)
                     .show_inside(ui, &mut viewer);
 
-                Self::commit_added_tabs(
-                    tree,
-                    &mut self.tab_monotonic_counter,
-                    viewer.into_added_tabs(),
-                );
+                Self::commit_added_tabs(tree, viewer.into_added_tabs());
 
                 if tree.main_surface().is_empty() {
-                    tree.main_surface_mut()
-                        .push_to_first_leaf(Self::new_tab(&mut self.tab_monotonic_counter));
+                    tree.main_surface_mut().push_to_first_leaf(LinePlot::new());
                 }
             });
 
