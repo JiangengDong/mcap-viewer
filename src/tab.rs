@@ -33,6 +33,7 @@ impl Default for Curve {
 pub struct LinePlot {
     id: usize,
     pub title: String,
+    pub x_axis_name: String,
     pub curves: Vec<Curve>,
     pub show_settings: bool,
     pub legend_corner: Option<Corner>,
@@ -55,93 +56,118 @@ impl LinePlot {
 
     fn menu(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
         ui.collapsing("Settings", |ui| {
-            self.settings_title(ui);
-
-            let mut keep = vec![true; self.curves.len()];
-            let mut insert = vec![];
-            for (i, curve) in self.curves.iter_mut().enumerate() {
-                ui.horizontal(|ui| {
-                    if ui
-                        .add(IconButton::Close)
-                        .on_hover_text("Remove curve")
-                        .clicked()
-                    {
-                        keep[i] = false;
-                    }
-
-                    ui.color_edit_button_srgba(&mut curve.color);
-
-                    let all_topics = storage.keys();
-                    ui.add(
-                        AutoCompleteTextEdit::new(&mut curve.topic, all_topics)
-                            .max_suggestions(10)
-                            .highlight_matches(true)
-                            .set_text_edit_properties(|text| {
-                                text.clip_text(false).hint_text("topic")
-                            }),
-                    );
-
-                    if let Some(selected_topic) = storage.get(&curve.topic) {
-                        let all_fields = selected_topic.keys();
-                        ui.add(
-                            AutoCompleteTextEdit::new(&mut curve.field, all_fields)
-                                .max_suggestions(10)
-                                .highlight_matches(true)
-                                .set_text_edit_properties(|text| {
-                                    text.clip_text(false).hint_text("field")
-                                }),
-                        );
-                    }
-
-                    if ui.add(IconButton::Add).on_hover_text("Add curve").clicked() {
-                        insert.push((i, false));
-                    }
-                    if ui
-                        .add(IconButton::Copy)
-                        .on_hover_text("Copy curve")
-                        .clicked()
-                    {
-                        insert.push((i, true));
-                    }
-                });
-            }
-            let mut keep_iter = keep.into_iter();
-            self.curves.retain(|_| keep_iter.next().unwrap());
-            for (insert_place, copy) in insert.into_iter().rev() {
-                if copy {
-                    self.curves
-                        .insert(insert_place + 1, self.curves[insert_place].clone());
-                } else {
-                    self.curves.insert(insert_place + 1, Curve::default());
-                }
-            }
-            if self.curves.is_empty() {
-                self.curves.push(Curve::default());
-            }
-
             ui.horizontal(|ui| {
-                ui.label("Legend position: ");
-                ui.selectable_value(
-                    &mut self.legend_corner,
-                    Some(Corner::LeftBottom),
-                    "left bottom",
-                );
-                ui.selectable_value(&mut self.legend_corner, Some(Corner::LeftTop), "left top");
-                ui.selectable_value(
-                    &mut self.legend_corner,
-                    Some(Corner::RightBottom),
-                    "right bottom",
-                );
-                ui.selectable_value(&mut self.legend_corner, Some(Corner::RightTop), "right top");
-                ui.selectable_value(&mut self.legend_corner, None, "none");
-            })
+                ui.label("Title");
+                ui.text_edit_singleline(&mut self.title);
+                self.settings_copy_paste_buttons(ui);
+            });
+
+            // ui.horizontal(|ui| {
+            //     ui.label("Time axis");
+            //     let id = ui.auto_id_with("new-time-axis-name");
+            //     let mut new_time_axis_name = ui
+            //         .memory(|mem| mem.data.get_temp::<String>(id))
+            //         .unwrap_or_default();
+            //     if ui
+            //         .text_edit_singleline(&mut new_time_axis_name)
+            //         .lost_focus()
+            //         && ui.input(|i| i.key_pressed(egui::Key::Enter))
+            //         && !new_time_axis_name.is_empty()
+            //     {
+            //         self.x_axis_name = std::mem::take(&mut new_time_axis_name);
+            //     }
+            //     ui.memory_mut(|mem| mem.data.insert_temp(id, new_time_axis_name));
+            // });
+
+            self.curve_editor(ui, storage);
+
+            self.legend_settings(ui);
         });
     }
 
-    fn settings_title(&mut self, ui: &mut egui::Ui) {
+    fn curve_editor(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
+        let mut keep = vec![true; self.curves.len()];
+        let mut insert = vec![];
+        for (i, curve) in self.curves.iter_mut().enumerate() {
+            ui.horizontal(|ui| {
+                if ui
+                    .add(IconButton::Close)
+                    .on_hover_text("Remove curve")
+                    .clicked()
+                {
+                    keep[i] = false;
+                }
+
+                ui.color_edit_button_srgba(&mut curve.color);
+
+                let all_topics = storage.keys();
+                ui.add(
+                    AutoCompleteTextEdit::new(&mut curve.topic, all_topics)
+                        .max_suggestions(10)
+                        .highlight_matches(true)
+                        .set_text_edit_properties(|text| text.clip_text(false).hint_text("topic")),
+                );
+
+                if let Some(selected_topic) = storage.get(&curve.topic) {
+                    let all_fields = selected_topic.keys();
+                    ui.add(
+                        AutoCompleteTextEdit::new(&mut curve.field, all_fields)
+                            .max_suggestions(10)
+                            .highlight_matches(true)
+                            .set_text_edit_properties(|text| {
+                                text.clip_text(false).hint_text("field")
+                            }),
+                    );
+                }
+
+                if ui.add(IconButton::Add).on_hover_text("Add curve").clicked() {
+                    insert.push((i, false));
+                }
+                if ui
+                    .add(IconButton::Copy)
+                    .on_hover_text("Copy curve")
+                    .clicked()
+                {
+                    insert.push((i, true));
+                }
+            });
+        }
+        let mut keep_iter = keep.into_iter();
+        self.curves.retain(|_| keep_iter.next().unwrap());
+        for (insert_place, copy) in insert.into_iter().rev() {
+            if copy {
+                self.curves
+                    .insert(insert_place + 1, self.curves[insert_place].clone());
+            } else {
+                self.curves.insert(insert_place + 1, Curve::default());
+            }
+        }
+        if self.curves.is_empty() {
+            self.curves.push(Curve::default());
+        }
+    }
+
+    fn legend_settings(&mut self, ui: &mut egui::Ui) -> egui::InnerResponse<()> {
         ui.horizontal(|ui| {
-            ui.label("Title");
-            ui.text_edit_singleline(&mut self.title);
+            ui.label("Legend position");
+            ui.selectable_value(
+                &mut self.legend_corner,
+                Some(Corner::LeftBottom),
+                "left bottom",
+            );
+            ui.selectable_value(&mut self.legend_corner, Some(Corner::LeftTop), "left top");
+            ui.selectable_value(
+                &mut self.legend_corner,
+                Some(Corner::RightBottom),
+                "right bottom",
+            );
+            ui.selectable_value(&mut self.legend_corner, Some(Corner::RightTop), "right top");
+            ui.selectable_value(&mut self.legend_corner, None, "none");
+        })
+    }
+
+    fn settings_copy_paste_buttons(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
             if ui
                 .add(IconButton::Copy)
                 .on_hover_text("Copy settings")
@@ -177,6 +203,8 @@ impl LinePlot {
         let plot = egui_plot::Plot::new("plot")
             .link_axis("time", true, false)
             .link_cursor("time", true, false)
+            // .link_axis(Id::new(&self.x_axis_name), true, false)
+            // .link_cursor(Id::new(&self.x_axis_name), true, false)
             .auto_bounds_x()
             .auto_bounds_y()
             .x_axis_formatter(Self::x_label)
@@ -265,9 +293,11 @@ impl egui_dock::TabViewer for Viewer<'_> {
         if tab.show_settings {
             if ui.button("hide settings").clicked() {
                 tab.show_settings = false;
+                ui.close_menu();
             }
         } else if ui.button("show settings").clicked() {
             tab.show_settings = true;
+            ui.close_menu();
         }
     }
 }

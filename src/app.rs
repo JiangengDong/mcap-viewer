@@ -28,8 +28,6 @@ pub struct McapViewer {
 
     /// The name of the active layout.
     active_layout_name: String,
-    /// The name of the new layout to be created.
-    new_layout_name: String,
     /// All the layouts.
     layouts: BTreeMap<String, DockState<LinePlot>>,
 }
@@ -41,7 +39,6 @@ impl Default for McapViewer {
             file_operation: FileOperation::None,
             loader: loader::Loader::new(),
             active_layout_name: String::new(),
-            new_layout_name: String::new(),
             layouts: BTreeMap::new(),
         }
     }
@@ -139,37 +136,39 @@ impl McapViewer {
                 });
 
             ui.label("New layout: ");
-            if ui
-                .text_edit_singleline(&mut self.new_layout_name)
-                .lost_focus()
+            let id = ui.auto_id_with("new-layout-name");
+            let mut new_layout_name = ui
+                .memory(|mem| mem.data.get_temp::<String>(id))
+                .unwrap_or_default();
+            if ui.text_edit_singleline(&mut new_layout_name).lost_focus()
                 && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && !self.new_layout_name.is_empty()
+                && !new_layout_name.is_empty()
             {
                 self.layouts
-                    .entry(self.new_layout_name.clone())
+                    .entry(new_layout_name.clone())
                     .or_insert_with(|| DockState::new(vec![]));
-                self.active_layout_name = std::mem::take(&mut self.new_layout_name);
+                self.active_layout_name = std::mem::take(&mut new_layout_name);
             }
 
             if ui
                 .add(IconButton::Add)
                 .on_hover_text("New empty layout")
                 .clicked()
-                && !self.new_layout_name.is_empty()
+                && !new_layout_name.is_empty()
             {
                 self.layouts
-                    .entry(self.new_layout_name.clone())
+                    .entry(new_layout_name.clone())
                     .or_insert_with(|| DockState::new(vec![]));
-                self.active_layout_name = std::mem::take(&mut self.new_layout_name);
+                self.active_layout_name = std::mem::take(&mut new_layout_name);
             }
 
             if ui
                 .add(IconButton::Copy)
                 .on_hover_text("Copy from current layout")
                 .clicked()
-                && !self.new_layout_name.is_empty()
+                && !new_layout_name.is_empty()
             {
-                let new_layout_name = std::mem::take(&mut self.new_layout_name);
+                let new_layout_name = std::mem::take(&mut new_layout_name);
                 let layout = self
                     .layouts
                     .get(&self.active_layout_name)
@@ -180,6 +179,7 @@ impl McapViewer {
                     .or_insert_with(|| layout);
                 self.active_layout_name = new_layout_name;
             }
+            ui.memory_mut(|mem| mem.data.insert_temp(id, new_layout_name));
         });
 
         // ensure there is at least one layout

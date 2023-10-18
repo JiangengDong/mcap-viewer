@@ -12,6 +12,7 @@ struct LinePlotDeProxy {
     title: String,
     curves: Vec<Curve>,
     show_settings: bool,
+    x_axis_name: String,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -20,6 +21,7 @@ struct LinePlotSerProxy<'a> {
     title: &'a str,
     curves: &'a [Curve],
     show_settings: bool,
+    x_axis_name: &'a str,
 }
 
 impl From<LinePlotDeProxy> for LinePlot {
@@ -28,10 +30,12 @@ impl From<LinePlotDeProxy> for LinePlot {
             title,
             curves,
             show_settings,
+            x_axis_name,
         } = value;
         Self {
             id: TAB_MONOTONIC_ID.fetch_add(1, Ordering::Relaxed),
             title,
+            x_axis_name,
             curves,
             show_settings,
             legend_corner: None,
@@ -45,11 +49,13 @@ impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
             title,
             curves,
             show_settings,
+            x_axis_name,
             ..
         } = value;
         Self {
             title,
             curves,
+            x_axis_name,
             show_settings: *show_settings,
         }
     }
