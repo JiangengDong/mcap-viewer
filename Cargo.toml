@@ -41,6 +41,8 @@ clap = { version = "4.4.6", features = ["derive"] }
 chrono = "0.4.31"
 crossbeam-channel = "0.5.8"
 rayon = "1.8.0"
+ron = "0.8.1"
+egui_extras = { version = "0.23.0", features = ["all_loaders"] }
 
 [profile.release]
 opt-level = 3

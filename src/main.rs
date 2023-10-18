@@ -25,6 +25,7 @@ fn main() -> eframe::Result<()> {
         "mcap viewer",
         native_options,
         Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             let viewer = if let Some(path) = cli.path {
                 mcap_viewer::McapViewer::from_path(cc, path).unwrap()
             } else {

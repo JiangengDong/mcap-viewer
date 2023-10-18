@@ -4,4 +4,5 @@
 mod app;
 mod loader;
 mod tab;
+mod utils;
 pub use app::McapViewer;

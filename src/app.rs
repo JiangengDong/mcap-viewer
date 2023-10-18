@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 use egui::{Align2, Color32, Frame, Id, LayerId, Order, TextStyle};
@@ -7,6 +7,7 @@ use std::fmt::Write as _;
 
 use crate::loader;
 use crate::tab::{LinePlot, Viewer};
+use crate::utils::IconButton;
 
 enum FileOperation {
     None,
@@ -33,7 +34,7 @@ pub struct McapViewer {
     /// The name of the new layout to be created.
     new_layout_name: String,
     /// All the layouts.
-    layouts: HashMap<String, DockState<LinePlot>>,
+    layouts: BTreeMap<String, DockState<LinePlot>>,
 }
 
 impl Default for McapViewer {
@@ -45,7 +46,7 @@ impl Default for McapViewer {
             tab_monotonic_counter: 0,
             active_layout_name: String::new(),
             new_layout_name: String::new(),
-            layouts: HashMap::new(),
+            layouts: BTreeMap::new(),
         }
     }
 }
@@ -128,7 +129,7 @@ impl McapViewer {
                     let mut removed_layouts = Vec::new();
                     for layout in self.layouts.keys() {
                         ui.horizontal(|ui| {
-                            if ui.button("-").clicked() {
+                            if ui.add(IconButton::Close).clicked() {
                                 removed_layouts.push(layout.clone());
                             }
                             if ui
@@ -155,6 +156,36 @@ impl McapViewer {
                     .entry(self.new_layout_name.clone())
                     .or_insert_with(|| DockState::new(vec![]));
                 self.active_layout_name = std::mem::take(&mut self.new_layout_name);
+            }
+
+            if ui
+                .add(IconButton::Add)
+                .on_hover_text("New empty layout")
+                .clicked()
+                && !self.new_layout_name.is_empty()
+            {
+                self.layouts
+                    .entry(self.new_layout_name.clone())
+                    .or_insert_with(|| DockState::new(vec![]));
+                self.active_layout_name = std::mem::take(&mut self.new_layout_name);
+            }
+
+            if ui
+                .add(IconButton::Copy)
+                .on_hover_text("Copy from current layout")
+                .clicked()
+                && !self.new_layout_name.is_empty()
+            {
+                let new_layout_name = std::mem::take(&mut self.new_layout_name);
+                let layout = self
+                    .layouts
+                    .get(&self.active_layout_name)
+                    .cloned()
+                    .unwrap_or_else(|| DockState::new(vec![]));
+                self.layouts
+                    .entry(new_layout_name.clone())
+                    .or_insert_with(|| layout);
+                self.active_layout_name = new_layout_name;
             }
         });
 

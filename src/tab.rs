@@ -1,11 +1,13 @@
 use std::ops::RangeInclusive;
 
-use egui::Color32;
+use egui::{Color32, Id};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_plot::{Corner, Legend, Line, PlotPoint, Points};
 use mcap_viewer_storage::DataStorage;
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
+use crate::utils::IconButton;
+
+#[derive(serde::Deserialize, serde::Serialize, Clone)]
 #[serde(default)]
 pub struct Curve {
     pub topic: String,
@@ -13,7 +15,17 @@ pub struct Curve {
     pub color: Color32,
 }
 
-#[derive(serde::Deserialize, serde::Serialize, Default)]
+impl Default for Curve {
+    fn default() -> Self {
+        Self {
+            topic: String::new(),
+            field: String::new(),
+            color: Color32::from_rgba_unmultiplied(255, 0, 0, 128),
+        }
+    }
+}
+
+#[derive(serde::Deserialize, serde::Serialize, Default, Clone)]
 #[serde(default)]
 pub struct LinePlot {
     pub id: usize,
@@ -39,17 +51,17 @@ impl LinePlot {
 
     fn menu(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
         ui.collapsing("Settings", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Title");
-                ui.text_edit_singleline(&mut self.title);
-                if ui.button("+").clicked() {
-                    self.curves.push(Curve::default());
-                }
-            });
+            self.settings_title(ui);
+
             let mut keep = vec![true; self.curves.len()];
+            let mut insert = vec![];
             for (i, curve) in self.curves.iter_mut().enumerate() {
                 ui.horizontal(|ui| {
-                    if ui.button("-").clicked() {
+                    if ui
+                        .add(IconButton::Close)
+                        .on_hover_text("Remove curve")
+                        .clicked()
+                    {
                         keep[i] = false;
                     }
 
@@ -76,10 +88,32 @@ impl LinePlot {
                                 }),
                         );
                     }
+
+                    if ui.add(IconButton::Add).on_hover_text("Add curve").clicked() {
+                        insert.push((i, false));
+                    }
+                    if ui
+                        .add(IconButton::Copy)
+                        .on_hover_text("Copy curve")
+                        .clicked()
+                    {
+                        insert.push((i, true));
+                    }
                 });
             }
             let mut keep_iter = keep.into_iter();
             self.curves.retain(|_| keep_iter.next().unwrap());
+            for (insert_place, copy) in insert.into_iter().rev() {
+                if copy {
+                    self.curves
+                        .insert(insert_place + 1, self.curves[insert_place].clone());
+                } else {
+                    self.curves.insert(insert_place + 1, Curve::default());
+                }
+            }
+            if self.curves.is_empty() {
+                self.curves.push(Curve::default());
+            }
 
             ui.horizontal(|ui| {
                 ui.label("Legend position: ");
@@ -100,10 +134,45 @@ impl LinePlot {
         });
     }
 
+    fn settings_title(&mut self, ui: &mut egui::Ui) {
+        ui.horizontal(|ui| {
+            ui.label("Title");
+            ui.text_edit_singleline(&mut self.title);
+            if ui
+                .add(IconButton::Copy)
+                .on_hover_text("Copy settings")
+                .clicked()
+            {
+                let setting_string = ron::to_string(self).unwrap_or_default();
+                ui.memory_mut(|mem| {
+                    mem.data
+                        .insert_temp(Id::new("mcap-viewer-plot-settings-copy"), setting_string);
+                });
+            }
+            if ui
+                .add(IconButton::Paste)
+                .on_hover_text("Paste settings")
+                .clicked()
+            {
+                let setting_string = ui.memory(|mem| {
+                    mem.data
+                        .get_temp::<String>(Id::new("mcap-viewer-plot-settings-copy"))
+                });
+                if let Some(setting_string) = setting_string {
+                    if let Ok(settings) = ron::from_str::<Self>(&setting_string) {
+                        let old_id = self.id;
+                        *self = settings;
+                        self.id = old_id;
+                    }
+                }
+            }
+        });
+    }
+
     fn plot(&self, ui: &mut egui::Ui, storage: &DataStorage) {
         let plot = egui_plot::Plot::new("plot")
-            .link_axis("time_axis", true, false)
-            .link_cursor("time_cursor", true, false)
+            .link_axis("time", true, false)
+            .link_cursor("time", true, false)
             .auto_bounds_x()
             .auto_bounds_y()
             .x_axis_formatter(Self::x_label)
