@@ -1,32 +1,22 @@
 use std::{ops::RangeInclusive, sync::atomic::AtomicUsize};
 
-use egui::{Color32, Id};
+use egui::{epaint::Hsva, Color32, Id};
 use egui_autocomplete::AutoCompleteTextEdit;
-use egui_plot::{Corner, Legend, Line, PlotPoint, Points};
+use egui_plot::{Corner, Legend, Line, PlotPoint, PlotPoints, Points};
 use mcap_viewer_storage::DataStorage;
 
-use crate::utils::IconButton;
+use crate::{cache::PlotPointStorage, widgets::IconButton};
 
 mod line_plot_serde;
 
 static TAB_MONOTONIC_ID: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(serde::Deserialize, serde::Serialize, Clone)]
+#[derive(serde::Deserialize, serde::Serialize, Clone, Default)]
 #[serde(default)]
 pub struct Curve {
     pub topic: String,
     pub field: String,
     pub color: Color32,
-}
-
-impl Default for Curve {
-    fn default() -> Self {
-        Self {
-            topic: String::new(),
-            field: String::new(),
-            color: Color32::from_rgba_unmultiplied(255, 0, 0, 128),
-        }
-    }
 }
 
 #[derive(Default, Clone)]
@@ -40,6 +30,14 @@ pub struct LinePlot {
 }
 
 impl LinePlot {
+    fn auto_color(next_auto_color_idx: &mut u16) -> Color32 {
+        let i = *next_auto_color_idx;
+        *next_auto_color_idx += 1;
+        let golden_ratio = (5.0_f32.sqrt() - 1.0) / 2.0; // 0.61803398875
+        let h = f32::from(i) * golden_ratio;
+        Hsva::new(h, 0.85, 0.5, 0.5).into() // TODO(emilk): OkLab or some other perspective color space
+    }
+
     pub fn new() -> Self {
         Self {
             id: TAB_MONOTONIC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
@@ -47,9 +45,9 @@ impl LinePlot {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
+    fn ui(&mut self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
         if self.show_settings {
-            self.menu(ui, storage);
+            self.menu(ui, storage.inner());
         }
         self.plot(ui, storage);
     }
@@ -199,7 +197,7 @@ impl LinePlot {
         });
     }
 
-    fn plot(&self, ui: &mut egui::Ui, storage: &DataStorage) {
+    fn plot(&self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
         let plot = egui_plot::Plot::new("plot")
             .link_axis("time", true, false)
             .link_cursor("time", true, false)
@@ -216,16 +214,30 @@ impl LinePlot {
             plot
         };
 
+        let all_points = self.curves.iter().map(|curve| {
+            let key = (curve.topic.as_str(), curve.field.as_str());
+            storage.get(key)
+        });
+
         plot.show(ui, move |ui| {
-            for curve in &self.curves {
-                if let Some(points) = storage
-                    .get(&curve.topic)
-                    .and_then(|topic| topic.get(&curve.field))
-                {
-                    let name = curve.topic.clone() + &curve.field;
-                    ui.line(Line::new(points).name(name.clone()).color(curve.color));
-                    ui.points(Points::new(points).name(name).color(curve.color));
-                }
+            let mut next_auto_color_idx = 0;
+            for (curve, points) in self.curves.iter().zip(all_points) {
+                let name = curve.topic.clone() + &curve.field;
+                let color = if curve.color == Color32::TRANSPARENT {
+                    Self::auto_color(&mut next_auto_color_idx)
+                } else {
+                    curve.color
+                };
+                ui.line(
+                    Line::new(PlotPoints::Owned(points.clone()))
+                        .name(name.clone())
+                        .color(color),
+                );
+                ui.points(
+                    Points::new(PlotPoints::Owned(points))
+                        .name(name)
+                        .color(color),
+                );
             }
         });
     }
@@ -256,7 +268,7 @@ impl LinePlot {
 }
 
 pub struct Viewer<'a> {
-    storage: &'a DataStorage,
+    storage: &'a mut PlotPointStorage,
     added_tabs: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex)>,
 }
 
@@ -303,7 +315,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
 }
 
 impl<'a> Viewer<'a> {
-    pub fn new(storage: &'a DataStorage) -> Self {
+    pub fn new(storage: &'a mut PlotPointStorage) -> Self {
         Self {
             storage,
             added_tabs: Vec::new(),

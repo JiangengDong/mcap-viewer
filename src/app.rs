@@ -3,11 +3,13 @@ use std::path::{Path, PathBuf};
 
 use egui::{Align2, Color32, Frame, Id, LayerId, Order, TextStyle};
 use egui_dock::{DockArea, DockState, Style};
+
 use std::fmt::Write as _;
 
+use crate::cache::PlotPointStorage;
 use crate::loader;
 use crate::tab::{LinePlot, Viewer};
-use crate::utils::IconButton;
+use crate::widgets::IconButton;
 
 enum FileOperation {
     None,
@@ -20,7 +22,7 @@ enum FileOperation {
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct McapViewer {
     #[serde(skip)] // This how you opt-out of serialization of a field
-    storage: mcap_viewer_storage::DataStorage,
+    storage: PlotPointStorage,
     #[serde(skip)]
     file_operation: FileOperation,
     #[serde(skip)]
@@ -35,7 +37,7 @@ pub struct McapViewer {
 impl Default for McapViewer {
     fn default() -> Self {
         Self {
-            storage: mcap_viewer_storage::DataStorage::default(),
+            storage: PlotPointStorage::default(),
             file_operation: FileOperation::None,
             loader: loader::Loader::new(),
             active_layout_name: String::new(),
@@ -96,7 +98,7 @@ impl McapViewer {
         {
             FileOperation::Loading(paths) => {
                 if let Some(storage) = self.loader.try_recv() {
-                    self.storage = storage;
+                    self.storage = PlotPointStorage::new(storage);
                     FileOperation::Loaded(paths)
                 } else {
                     FileOperation::Loading(paths)
@@ -238,7 +240,7 @@ impl eframe::App for McapViewer {
         egui::CentralPanel::default()
             .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
             .show(ctx, |ui| {
-                let mut viewer = Viewer::new(&self.storage);
+                let mut viewer = Viewer::new(&mut self.storage);
                 let Some(tree) = self.layouts.get_mut(&self.active_layout_name) else {
                     log::warn!("Cannot find layout {}", self.active_layout_name);
                     return;
@@ -263,6 +265,8 @@ impl eframe::App for McapViewer {
                 self.try_start_loading(paths, ctx);
             }
         });
+
+        self.storage.evice_cache();
     }
 }
 
