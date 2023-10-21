@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use egui::{Align2, Color32, Frame, Id, LayerId, Order, TextStyle};
@@ -9,7 +9,7 @@ use std::fmt::Write as _;
 use crate::cache::PlotPointStorage;
 use crate::loader;
 use crate::tab::{LinePlot, Viewer};
-use crate::widgets::IconButton;
+use crate::widgets::{ComboBox, IconButton, MemorizeTextEdit};
 
 enum FileOperation {
     None,
@@ -32,6 +32,8 @@ pub struct McapViewer {
     active_layout_name: String,
     /// All the layouts.
     layouts: BTreeMap<String, DockState<LinePlot>>,
+    /// All the time axises
+    time_axis_set: BTreeSet<String>,
 }
 
 impl Default for McapViewer {
@@ -42,6 +44,7 @@ impl Default for McapViewer {
             loader: loader::Loader::new(),
             active_layout_name: String::new(),
             layouts: BTreeMap::new(),
+            time_axis_set: BTreeSet::new(),
         }
     }
 }
@@ -111,9 +114,9 @@ impl McapViewer {
     fn layout_menu(&mut self, ui: &mut egui::Ui) {
         ui.horizontal(|ui| {
             ui.label("Layout: ");
-            egui::ComboBox::from_id_source("Layout")
+            ComboBox::from_id_source("Layout")
                 .selected_text(&self.active_layout_name)
-                .show_ui(ui, |ui| {
+                .show_ui(ui, |ui, close| {
                     let mut removed_layouts = Vec::new();
                     for layout in self.layouts.keys() {
                         ui.horizontal(|ui| {
@@ -123,65 +126,51 @@ impl McapViewer {
                                 .clicked()
                             {
                                 removed_layouts.push(layout.clone());
+                                *close = true;
                             }
                             if ui
                                 .selectable_label(self.active_layout_name == *layout, layout)
                                 .clicked()
                             {
                                 self.active_layout_name = layout.clone();
+                                *close = true;
                             }
                         });
                     }
                     for layout in removed_layouts {
                         self.layouts.remove(&layout);
                     }
+
+                    ui.horizontal(|ui| {
+                        let copy_button = ui
+                            .add(IconButton::Copy)
+                            .on_hover_text("Copy from current layout");
+                        let text_response = MemorizeTextEdit::show(ui);
+                        if text_response.text.is_empty() {
+                            return;
+                        }
+                        let new_layout_name = text_response.text;
+
+                        if text_response.confirmed {
+                            self.layouts
+                                .entry(new_layout_name.clone())
+                                .or_insert_with(|| DockState::new(vec![]));
+                            self.active_layout_name = new_layout_name;
+                            *close = true;
+                        } else if copy_button.clicked() {
+                            let layout = self
+                                .layouts
+                                .get(&self.active_layout_name)
+                                .cloned()
+                                .unwrap_or_else(|| DockState::new(vec![]));
+                            self.layouts
+                                .entry(new_layout_name.clone())
+                                .or_insert_with(|| layout);
+                            self.active_layout_name = new_layout_name;
+                            *close = true;
+                        }
+                    });
                 });
-
-            ui.label("New layout: ");
-            let id = ui.auto_id_with("new-layout-name");
-            let mut new_layout_name = ui
-                .memory(|mem| mem.data.get_temp::<String>(id))
-                .unwrap_or_default();
-            if ui.text_edit_singleline(&mut new_layout_name).lost_focus()
-                && ui.input(|i| i.key_pressed(egui::Key::Enter))
-                && !new_layout_name.is_empty()
-            {
-                self.layouts
-                    .entry(new_layout_name.clone())
-                    .or_insert_with(|| DockState::new(vec![]));
-                self.active_layout_name = std::mem::take(&mut new_layout_name);
-            }
-
-            if ui
-                .add(IconButton::Add)
-                .on_hover_text("New empty layout")
-                .clicked()
-                && !new_layout_name.is_empty()
-            {
-                self.layouts
-                    .entry(new_layout_name.clone())
-                    .or_insert_with(|| DockState::new(vec![]));
-                self.active_layout_name = std::mem::take(&mut new_layout_name);
-            }
-
-            if ui
-                .add(IconButton::Copy)
-                .on_hover_text("Copy from current layout")
-                .clicked()
-                && !new_layout_name.is_empty()
-            {
-                let new_layout_name = std::mem::take(&mut new_layout_name);
-                let layout = self
-                    .layouts
-                    .get(&self.active_layout_name)
-                    .cloned()
-                    .unwrap_or_else(|| DockState::new(vec![]));
-                self.layouts
-                    .entry(new_layout_name.clone())
-                    .or_insert_with(|| layout);
-                self.active_layout_name = new_layout_name;
-            }
-            ui.memory_mut(|mem| mem.data.insert_temp(id, new_layout_name));
         });
 
         // ensure there is at least one layout
@@ -240,7 +229,7 @@ impl eframe::App for McapViewer {
         egui::CentralPanel::default()
             .frame(Frame::central_panel(&ctx.style()).inner_margin(0.))
             .show(ctx, |ui| {
-                let mut viewer = Viewer::new(&mut self.storage);
+                let mut viewer = Viewer::new(&mut self.storage, &mut self.time_axis_set);
                 let Some(tree) = self.layouts.get_mut(&self.active_layout_name) else {
                     log::warn!("Cannot find layout {}", self.active_layout_name);
                     return;

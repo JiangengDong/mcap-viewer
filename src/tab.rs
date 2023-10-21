@@ -1,4 +1,4 @@
-use std::{ops::RangeInclusive, sync::atomic::AtomicUsize};
+use std::{collections::BTreeSet, ops::RangeInclusive, sync::atomic::AtomicUsize};
 
 use egui::{epaint::Hsva, Color32, Id};
 use egui_autocomplete::AutoCompleteTextEdit;
@@ -7,7 +7,7 @@ use mcap_viewer_storage::DataStorage;
 
 use crate::{
     cache::{Key, PlotPointStorage},
-    widgets::IconButton,
+    widgets::{ComboBox, IconButton, MemorizeTextEdit},
 };
 
 mod line_plot_serde;
@@ -26,7 +26,7 @@ pub struct Curve {
 pub struct LinePlot {
     id: usize,
     pub title: String,
-    pub x_axis_name: String,
+    pub active_time_axis: String,
     pub curves: Vec<Curve>,
     pub show_settings: bool,
     pub legend_corner: Option<Corner>,
@@ -44,18 +44,19 @@ impl LinePlot {
     pub fn new() -> Self {
         Self {
             id: TAB_MONOTONIC_ID.fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            active_time_axis: "time".to_owned(),
             ..Default::default()
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
+    fn ui(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
         if self.show_settings {
-            self.menu(ui, storage.inner());
+            self.menu(ui, viewer);
         }
-        self.plot(ui, storage);
+        self.plot(ui, viewer.storage);
     }
 
-    fn menu(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
+    fn menu(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
         ui.collapsing("Settings", |ui| {
             ui.horizontal(|ui| {
                 ui.label("Title");
@@ -63,27 +64,69 @@ impl LinePlot {
                 self.settings_copy_paste_buttons(ui);
             });
 
-            // ui.horizontal(|ui| {
-            //     ui.label("Time axis");
-            //     let id = ui.auto_id_with("new-time-axis-name");
-            //     let mut new_time_axis_name = ui
-            //         .memory(|mem| mem.data.get_temp::<String>(id))
-            //         .unwrap_or_default();
-            //     if ui
-            //         .text_edit_singleline(&mut new_time_axis_name)
-            //         .lost_focus()
-            //         && ui.input(|i| i.key_pressed(egui::Key::Enter))
-            //         && !new_time_axis_name.is_empty()
-            //     {
-            //         self.x_axis_name = std::mem::take(&mut new_time_axis_name);
-            //     }
-            //     ui.memory_mut(|mem| mem.data.insert_temp(id, new_time_axis_name));
-            // });
+            self.time_axis_selector(ui, viewer);
 
-            self.curve_editor(ui, storage);
+            self.curve_editor(ui, viewer.storage.inner());
 
             self.legend_settings(ui);
         });
+    }
+
+    fn time_axis_selector(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
+        ui.horizontal(|ui| {
+            ui.label("Time axis group: ");
+            ComboBox::from_id_source("Time axis group")
+                .selected_text(&self.active_time_axis)
+                .show_ui(ui, |ui, close| {
+                    let mut removed_time_axis = Vec::new();
+                    for time_axis in viewer.time_axis_set.iter() {
+                        ui.horizontal(|ui| {
+                            if ui
+                                .add(IconButton::Close)
+                                .on_hover_text("Remove time axis group")
+                                .clicked()
+                            {
+                                removed_time_axis.push(time_axis.clone());
+                                *close = true;
+                            }
+                            if ui
+                                .selectable_label(self.active_time_axis == *time_axis, time_axis)
+                                .clicked()
+                            {
+                                self.active_time_axis = time_axis.clone();
+                                *close = true;
+                            }
+                        });
+                    }
+                    for time_axis in removed_time_axis {
+                        viewer.time_axis_set.remove(&time_axis);
+                    }
+
+                    ui.horizontal(|ui| {
+                        let text_response = MemorizeTextEdit::show(ui);
+                        if text_response.text.is_empty() {
+                            return;
+                        }
+                        let new_time_axis = text_response.text;
+
+                        if text_response.confirmed {
+                            viewer.time_axis_set.insert(new_time_axis.clone());
+                            self.active_time_axis = new_time_axis;
+                            *close = true;
+                        }
+                    });
+                });
+        });
+
+        // ensure there is at least one time axis
+        if viewer.time_axis_set.is_empty() {
+            viewer.time_axis_set.insert("time".to_owned());
+        }
+
+        // ensure the active time axis is valid
+        if !viewer.time_axis_set.contains(&self.active_time_axis) {
+            self.active_time_axis = viewer.time_axis_set.first().unwrap().clone();
+        }
     }
 
     fn curve_editor(&mut self, ui: &mut egui::Ui, storage: &DataStorage) {
@@ -203,10 +246,8 @@ impl LinePlot {
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn plot(&self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
         let plot = egui_plot::Plot::new("plot")
-            .link_axis("time", true, false)
-            .link_cursor("time", true, false)
-            // .link_axis(Id::new(&self.x_axis_name), true, false)
-            // .link_cursor(Id::new(&self.x_axis_name), true, false)
+            .link_axis(Id::new(&self.active_time_axis), true, false)
+            .link_cursor(Id::new(&self.active_time_axis), true, false)
             .allow_double_click_reset(false)
             .x_axis_formatter(Self::x_label)
             .label_formatter(Self::format_label);
@@ -300,6 +341,7 @@ impl LinePlot {
 
 pub struct Viewer<'a> {
     storage: &'a mut PlotPointStorage,
+    time_axis_set: &'a mut BTreeSet<String>,
     added_tabs: Vec<(egui_dock::SurfaceIndex, egui_dock::NodeIndex)>,
 }
 
@@ -319,7 +361,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, tab: &mut Self::Tab) {
-        tab.ui(ui, self.storage);
+        tab.ui(ui, self);
     }
 
     fn on_add(&mut self, surface: egui_dock::SurfaceIndex, node: egui_dock::NodeIndex) {
@@ -346,9 +388,10 @@ impl egui_dock::TabViewer for Viewer<'_> {
 }
 
 impl<'a> Viewer<'a> {
-    pub fn new(storage: &'a mut PlotPointStorage) -> Self {
+    pub fn new(storage: &'a mut PlotPointStorage, time_axis_set: &'a mut BTreeSet<String>) -> Self {
         Self {
             storage,
+            time_axis_set,
             added_tabs: Vec::new(),
         }
     }

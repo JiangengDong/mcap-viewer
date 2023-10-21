@@ -35,7 +35,7 @@ impl From<LinePlotDeProxy> for LinePlot {
         Self {
             id: TAB_MONOTONIC_ID.fetch_add(1, Ordering::Relaxed),
             title,
-            x_axis_name,
+            active_time_axis: x_axis_name,
             curves,
             show_settings,
             legend_corner: None,
@@ -49,7 +49,7 @@ impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
             title,
             curves,
             show_settings,
-            x_axis_name,
+            active_time_axis: x_axis_name,
             ..
         } = value;
         Self {
