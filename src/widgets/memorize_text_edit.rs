@@ -15,6 +15,7 @@ impl<'a> MemorizeTextEdit<'a> {
         Self { hint: None }
     }
 
+    #[allow(clippy::unused_self)]
     pub fn hint<'b, T>(self, hint: &'b T) -> MemorizeTextEdit<'b>
     where
         T: AsRef<str> + ?Sized,

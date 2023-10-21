@@ -33,11 +33,12 @@ pub struct ComboBox {
 
 impl ComboBox {
     /// Create new [`ComboBox`] with id and label
+    #[allow(unused)]
     pub fn new(id_source: impl std::hash::Hash, label: impl Into<WidgetText>) -> Self {
         Self {
             id_source: Id::new(id_source),
             label: Some(label.into()),
-            selected_text: Default::default(),
+            selected_text: WidgetText::default(),
             width: None,
             icon: None,
             wrap_enabled: false,
@@ -45,12 +46,13 @@ impl ComboBox {
     }
 
     /// Label shown next to the combo box
+    #[allow(unused)]
     pub fn from_label(label: impl Into<WidgetText>) -> Self {
         let label = label.into();
         Self {
             id_source: Id::new(label.text()),
             label: Some(label),
-            selected_text: Default::default(),
+            selected_text: WidgetText::default(),
             width: None,
             icon: None,
             wrap_enabled: false,
@@ -61,8 +63,8 @@ impl ComboBox {
     pub fn from_id_source(id_source: impl std::hash::Hash) -> Self {
         Self {
             id_source: Id::new(id_source),
-            label: Default::default(),
-            selected_text: Default::default(),
+            label: Option::default(),
+            selected_text: WidgetText::default(),
             width: None,
             icon: None,
             wrap_enabled: false,
@@ -70,6 +72,7 @@ impl ComboBox {
     }
 
     /// Set the outer width of the button and menu.
+    #[allow(unused)]
     pub fn width(mut self, width: f32) -> Self {
         self.width = Some(width);
         self
@@ -112,6 +115,7 @@ impl ComboBox {
     ///     .show_ui(ui, |_ui| {});
     /// # });
     /// ```
+    #[allow(unused)]
     pub fn icon(
         mut self,
         icon_fn: impl FnOnce(&Ui, Rect, &WidgetVisuals, bool, AboveOrBelow) + 'static,
@@ -137,10 +141,10 @@ impl ComboBox {
         self.show_ui_dyn(ui, Box::new(menu_contents))
     }
 
-    fn show_ui_dyn<'c, R>(
+    fn show_ui_dyn<R>(
         self,
         ui: &mut Ui,
-        menu_contents: Box<dyn FnOnce(&mut Ui, &mut bool) -> R + 'c>,
+        menu_contents: ComboxBoxMenuDrawer<'_, R>,
     ) -> InnerResponse<Option<R>> {
         let Self {
             id_source,
@@ -194,6 +198,7 @@ impl ComboBox {
     /// );
     /// # });
     /// ```
+    #[allow(unused)]
     pub fn show_index<Text: Into<WidgetText>>(
         self,
         ui: &mut Ui,
@@ -201,11 +206,11 @@ impl ComboBox {
         len: usize,
         get: impl Fn(usize) -> Text,
     ) -> Response {
-        let slf = self.selected_text(get(*selected));
+        let obj = self.selected_text(get(*selected));
 
         let mut changed = false;
 
-        let mut response = slf
+        let mut response = obj
             .show_ui(ui, |ui, close| {
                 for i in 0..len {
                     if ui.selectable_label(i == *selected, get(i)).clicked() {
@@ -224,11 +229,13 @@ impl ComboBox {
     }
 }
 
-fn combo_box_dyn<'c, R>(
+type ComboxBoxMenuDrawer<'c, R> = Box<dyn FnOnce(&mut Ui, &mut bool) -> R + 'c>;
+
+fn combo_box_dyn<R>(
     ui: &mut Ui,
     button_id: Id,
     selected_text: WidgetText,
-    menu_contents: Box<dyn FnOnce(&mut Ui, &mut bool) -> R + 'c>,
+    menu_contents: ComboxBoxMenuDrawer<'_, R>,
     icon: Option<IconPainter>,
     wrap_enabled: bool,
     width: Option<f32>,
@@ -485,7 +492,7 @@ pub fn popup_above_or_below_widget<R>(
             || (widget_response.clicked_elsewhere() && response.response.clicked_elsewhere())
             || close
         {
-            ui.memory_mut(|mem| mem.close_popup());
+            ui.memory_mut(egui::Memory::close_popup);
         }
         Some(response.inner)
     } else {
