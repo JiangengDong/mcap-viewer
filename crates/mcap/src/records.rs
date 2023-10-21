@@ -15,6 +15,8 @@ use std::{
 use binrw::io::{Read, Seek, Write};
 use binrw::*;
 
+use crate::WriteOptions;
+
 /// Opcodes for MCAP file records.
 ///
 /// "Records are identified by a single-byte opcode.

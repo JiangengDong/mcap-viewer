@@ -229,15 +229,11 @@ impl LinePlot {
                     curve.color
                 };
                 ui.line(
-                    Line::new(PlotPoints::Owned(points.clone()))
+                    Line::new(PlotPoints::new(points.clone()))
                         .name(name.clone())
                         .color(color),
                 );
-                ui.points(
-                    Points::new(PlotPoints::Owned(points))
-                        .name(name)
-                        .color(color),
-                );
+                ui.points(Points::new(PlotPoints::new(points)).name(name).color(color));
             }
         });
     }

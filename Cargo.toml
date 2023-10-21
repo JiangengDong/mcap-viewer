@@ -45,6 +45,7 @@ rayon = "1.8.0"
 ron = "0.8.1"
 egui_extras = { version = "0.23.0", features = ["all_loaders"] }
 nohash-hasher = "0.2.0"
+downsample_rs = { git = "https://github.com/predict-idlab/tsdownsample.git", version = "0.1.0" }
 
 [profile.release]
 opt-level = 3

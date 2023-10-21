@@ -240,11 +240,10 @@ impl TimeSeries {
     gen_time_series_method!(push_f64, as_f64, as_mut_f64, f64, F64);
 }
 
-#[cfg(feature = "egui_plot")]
-impl From<TimeSeries> for egui_plot::PlotPoints {
+impl From<TimeSeries> for Vec<[f64; 2]> {
     fn from(value: TimeSeries) -> Self {
         match value {
-            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Uninit => vec![],
             TimeSeries::Bool(v) => v
                 .into_iter()
                 .map(|(x, y)| [x as f64, y as u8 as f64])
@@ -263,11 +262,10 @@ impl From<TimeSeries> for egui_plot::PlotPoints {
     }
 }
 
-#[cfg(feature = "egui_plot")]
-impl From<&TimeSeries> for egui_plot::PlotPoints {
+impl From<&TimeSeries> for Vec<[f64; 2]> {
     fn from(value: &TimeSeries) -> Self {
         match value {
-            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Uninit => vec![],
             TimeSeries::Bool(v) => v
                 .iter()
                 .map(|(x, y)| [*x as f64, *y as u8 as f64])
@@ -282,112 +280,6 @@ impl From<&TimeSeries> for egui_plot::PlotPoints {
             TimeSeries::U64(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
             TimeSeries::F32(v) => v.iter().map(|(x, y)| [*x as f64, *y as f64]).collect(),
             TimeSeries::F64(v) => v.iter().map(|(x, y)| [*x as f64, *y]).collect(),
-        }
-    }
-}
-
-#[cfg(feature = "egui_plot")]
-impl From<TimeSeries> for Vec<egui_plot::PlotPoint> {
-    fn from(value: TimeSeries) -> Self {
-        match value {
-            TimeSeries::Uninit => vec![],
-            TimeSeries::Bool(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as u8 as f64))
-                .collect(),
-            TimeSeries::I8(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::I16(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::I32(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::I64(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::U8(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::U16(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::U32(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::U64(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::F32(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y as f64))
-                .collect(),
-            TimeSeries::F64(v) => v
-                .into_iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(x as f64, y))
-                .collect(),
-        }
-    }
-}
-
-#[cfg(feature = "egui_plot")]
-impl From<&TimeSeries> for Vec<egui_plot::PlotPoint> {
-    fn from(value: &TimeSeries) -> Self {
-        match value {
-            TimeSeries::Uninit => vec![],
-            TimeSeries::Bool(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as u8 as f64))
-                .collect(),
-            TimeSeries::I8(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::I16(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::I32(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::I64(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::U8(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::U16(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::U32(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::U64(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::F32(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y as f64))
-                .collect(),
-            TimeSeries::F64(v) => v
-                .iter()
-                .map(|(x, y)| egui_plot::PlotPoint::new(*x as f64, *y))
-                .collect(),
         }
     }
 }
