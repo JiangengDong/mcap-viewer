@@ -120,7 +120,7 @@ struct McapString {
 fn write_string<W: binrw::io::Write + binrw::io::Seek>(
     s: &String,
     w: &mut W,
-    opts: &WriteOptions,
+    opts: Endian,
     args: (),
 ) -> BinResult<()> {
     (s.len() as u32).write_options(w, opts, args)?;
@@ -128,9 +128,9 @@ fn write_string<W: binrw::io::Write + binrw::io::Seek>(
     Ok(())
 }
 
-fn parse_vec<T: binrw::BinRead<Args = ()>, R: Read + Seek>(
+fn parse_vec<T: for<'a> binrw::BinRead<Args<'a> = ()>, R: Read + Seek>(
     reader: &mut R,
-    ro: &ReadOptions,
+    ro: Endian,
     args: (),
 ) -> BinResult<Vec<T>> {
     let mut parsed = Vec::new();
@@ -147,10 +147,10 @@ fn parse_vec<T: binrw::BinRead<Args = ()>, R: Read + Seek>(
 }
 
 #[allow(clippy::ptr_arg)] // needed to match binrw macros
-fn write_vec<W: binrw::io::Write + binrw::io::Seek, T: binrw::BinWrite<Args = ()>>(
+fn write_vec<W: binrw::io::Write + binrw::io::Seek, T: for<'a> binrw::BinWrite<Args<'a> = ()>>(
     v: &Vec<T>,
     w: &mut W,
-    opts: &WriteOptions,
+    opts: Endian,
     args: (),
 ) -> BinResult<()> {
     use std::io::SeekFrom;
@@ -201,7 +201,7 @@ pub struct SchemaHeader {
 
 fn parse_string_map<R: Read + Seek>(
     reader: &mut R,
-    ro: &ReadOptions,
+    ro: Endian,
     args: (),
 ) -> BinResult<BTreeMap<String, String>> {
     let mut parsed = BTreeMap::new();
@@ -227,7 +227,7 @@ fn parse_string_map<R: Read + Seek>(
 fn write_string_map<W: Write + Seek>(
     s: &BTreeMap<String, String>,
     w: &mut W,
-    opts: &WriteOptions,
+    opts: Endian,
     args: (),
 ) -> BinResult<()> {
     // Ugh: figure out total number of bytes to write:
@@ -249,10 +249,14 @@ fn write_string_map<W: Write + Seek>(
     Ok(())
 }
 
-fn write_int_map<K: BinWrite<Args = ()>, V: BinWrite<Args = ()>, W: Write + Seek>(
+fn write_int_map<
+    K: for<'a> BinWrite<Args<'a> = ()>,
+    V: for<'a> BinWrite<Args<'a> = ()>,
+    W: Write + Seek,
+>(
     s: &BTreeMap<K, V>,
     w: &mut W,
-    opts: &WriteOptions,
+    opts: Endian,
     args: (),
 ) -> BinResult<()> {
     // Ugh: figure out total number of bytes to write:
@@ -275,10 +279,10 @@ fn write_int_map<K: BinWrite<Args = ()>, V: BinWrite<Args = ()>, W: Write + Seek
     Ok(())
 }
 
-fn parse_int_map<K, V, R>(reader: &mut R, ro: &ReadOptions, args: ()) -> BinResult<BTreeMap<K, V>>
+fn parse_int_map<K, V, R>(reader: &mut R, ro: Endian, args: ()) -> BinResult<BTreeMap<K, V>>
 where
-    K: BinRead<Args = ()> + std::cmp::Ord,
-    V: BinRead<Args = ()>,
+    K: for<'a> BinRead<Args<'a> = ()> + std::cmp::Ord,
+    V: for<'a> BinRead<Args<'a> = ()>,
     R: Read + Seek,
 {
     let mut parsed = BTreeMap::new();

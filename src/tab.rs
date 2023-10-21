@@ -2,10 +2,13 @@ use std::{ops::RangeInclusive, sync::atomic::AtomicUsize};
 
 use egui::{epaint::Hsva, Color32, Id};
 use egui_autocomplete::AutoCompleteTextEdit;
-use egui_plot::{Corner, Legend, Line, PlotPoint, PlotPoints, Points};
+use egui_plot::{Corner, Legend, Line, PlotBounds, PlotPoint, PlotPoints, Points};
 use mcap_viewer_storage::DataStorage;
 
-use crate::{cache::PlotPointStorage, widgets::IconButton};
+use crate::{
+    cache::{Key, PlotPointStorage},
+    widgets::IconButton,
+};
 
 mod line_plot_serde;
 
@@ -197,14 +200,14 @@ impl LinePlot {
         });
     }
 
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     fn plot(&self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
         let plot = egui_plot::Plot::new("plot")
             .link_axis("time", true, false)
             .link_cursor("time", true, false)
             // .link_axis(Id::new(&self.x_axis_name), true, false)
             // .link_cursor(Id::new(&self.x_axis_name), true, false)
-            .auto_bounds_x()
-            .auto_bounds_y()
+            .allow_double_click_reset(false)
             .x_axis_formatter(Self::x_label)
             .label_formatter(Self::format_label);
 
@@ -214,14 +217,28 @@ impl LinePlot {
             plot
         };
 
-        let all_points = self.curves.iter().map(|curve| {
-            let key = (curve.topic.as_str(), curve.field.as_str());
-            storage.get(key)
-        });
-
         plot.show(ui, move |ui| {
+            let transform = *ui.transform();
+            let mut bounds = *transform.bounds();
+            if storage.dirty() || ui.response().double_clicked() {
+                let new_bounds = self.collect_bounds(storage.inner());
+                if new_bounds.is_finite() {
+                    bounds = new_bounds;
+                    ui.set_plot_bounds(new_bounds);
+                }
+            }
+            let frame = transform.frame();
+
             let mut next_auto_color_idx = 0;
-            for (curve, points) in self.curves.iter().zip(all_points) {
+            for curve in &self.curves {
+                let key = Key {
+                    topic: &curve.topic,
+                    field: &curve.field,
+                    time_range: [bounds.min()[0] as i64, bounds.max()[0] as i64],
+                    num_points: frame.width() as usize * 2,
+                };
+                let points = storage.get(&key);
+
                 let name = curve.topic.clone() + &curve.field;
                 let color = if curve.color == Color32::TRANSPARENT {
                     Self::auto_color(&mut next_auto_color_idx)
@@ -236,6 +253,24 @@ impl LinePlot {
                 ui.points(Points::new(PlotPoints::new(points)).name(name).color(color));
             }
         });
+    }
+
+    fn collect_bounds(&self, storage: &DataStorage) -> PlotBounds {
+        let (mut min, mut max) = ([f64::INFINITY; 2], [-f64::INFINITY; 2]);
+        for curve in &self.curves {
+            if let Some(curve) = storage.get_field(&curve.topic, &curve.field) {
+                let curve = Vec::<[f64; 2]>::from(curve);
+                (min, max) = curve.into_iter().fold((min, max), |bound, p| {
+                    let (mut min, mut max) = bound;
+                    min[0] = min[0].min(p[0]);
+                    min[1] = min[1].min(p[1]);
+                    max[0] = max[0].max(p[0]);
+                    max[1] = max[1].max(p[1]);
+                    (min, max)
+                });
+            }
+        }
+        PlotBounds::from_min_max(min, max)
     }
 
     #[allow(

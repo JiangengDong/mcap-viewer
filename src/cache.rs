@@ -1,12 +1,11 @@
-use egui_plot::PlotPoint;
 use mcap_viewer_storage::DataStorage;
 use nohash_hasher::IntMap;
 
 #[derive(Hash)]
 pub struct Key<'a> {
+    pub topic: &'a str,
     pub field: &'a str,
-    pub name: &'a str,
-    pub time_range: [f64; 2],
+    pub time_range: [i64; 2],
     pub num_points: usize,
 }
 
@@ -15,6 +14,7 @@ pub struct PlotPointStorage {
     generation: u32,
     cache: IntMap<u64, (u32, Vec<[f64; 2]>)>,
     storage: DataStorage,
+    dirty: bool,
 }
 
 impl PlotPointStorage {
@@ -23,6 +23,7 @@ impl PlotPointStorage {
             generation: 0,
             cache: IntMap::default(),
             storage,
+            dirty: true,
         }
     }
 
@@ -33,11 +34,12 @@ impl PlotPointStorage {
             cached.0 == current_generation // only keep those that were used this frame
         });
         self.generation = self.generation.wrapping_add(1);
+        self.dirty = false;
     }
 
     /// Get from cache (if the same key was used last frame)
     /// or recompute and store in the cache.
-    pub fn get(&mut self, key: Key) -> Vec<[f64; 2]> {
+    pub fn get(&mut self, key: &Key<'_>) -> Vec<[f64; 2]> {
         let hash = egui::util::hash(key);
 
         match self.cache.entry(hash) {
@@ -49,7 +51,7 @@ impl PlotPointStorage {
             std::collections::hash_map::Entry::Vacant(entry) => {
                 let value = self
                     .storage
-                    .get_field(key.0, key.1)
+                    .get_field(key.topic, key.field)
                     .map(Vec::<[f64; 2]>::from)
                     .unwrap_or_default();
                 let value = Self::downsample(value, key.time_range, key.num_points);
@@ -59,22 +61,23 @@ impl PlotPointStorage {
         }
     }
 
-    fn downsample(data: Vec<[f64; 2]>, time_range: [f64; 2], num_points: usize) -> Vec<[f64; 2]> {
+    #[allow(clippy::cast_precision_loss)]
+    fn downsample(data: Vec<[f64; 2]>, time_range: [i64; 2], num_points: usize) -> Vec<[f64; 2]> {
         if data.is_empty() {
             return data;
         }
 
-        let start_idx = if data.first().unwrap()[0] >= time_range[0] {
+        let start_idx = if data.first().unwrap()[0] >= time_range[0] as f64 {
             0
         } else {
-            data.partition_point(|p| p[0] < time_range[0])
+            data.partition_point(|p| p[0] < time_range[0] as f64)
                 .saturating_sub(20)
         };
 
-        let end_idx = if data.last().unwrap()[0] <= time_range[1] {
+        let end_idx = if data.last().unwrap()[0] <= time_range[1] as f64 {
             data.len()
         } else {
-            data.partition_point(|p| p[0] < time_range[1])
+            data.partition_point(|p| p[0] < time_range[1] as f64)
                 .saturating_add(20)
                 .min(data.len())
         };
@@ -89,5 +92,9 @@ impl PlotPointStorage {
 
     pub fn inner(&self) -> &DataStorage {
         &self.storage
+    }
+
+    pub fn dirty(&self) -> bool {
+        self.dirty
     }
 }
