@@ -1,9 +1,6 @@
-use std::{
-    collections::{HashMap, HashSet},
-    str::Utf8Error,
-    sync::Arc,
-};
+use std::{str::Utf8Error, sync::Arc};
 
+use hashbrown::{HashMap, HashSet};
 use once_cell::sync::Lazy;
 use regex::{Regex, RegexBuilder};
 

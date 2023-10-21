@@ -1,10 +1,8 @@
 #![warn(clippy::pedantic)]
 #![allow(missing_docs, clippy::missing_errors_doc)]
 
-use std::{
-    collections::{hash_map::RandomState, HashMap},
-    sync::{Arc, RwLock},
-};
+use hashbrown::{hash_map::DefaultHashBuilder, HashMap};
+use std::sync::{Arc, RwLock};
 
 use mcap_decoder::Visitor;
 
@@ -21,11 +19,11 @@ pub enum Error {
 }
 
 #[derive(Clone, Default)]
-pub struct Decoder<S = RandomState> {
+pub struct Decoder<S = DefaultHashBuilder> {
     message_table: Arc<RwLock<HashMap<schema::MsgId, Arc<schema::Msg>, S>>>,
 }
 
-impl Decoder<RandomState> {
+impl Decoder<DefaultHashBuilder> {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
