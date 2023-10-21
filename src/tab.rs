@@ -247,7 +247,7 @@ impl LinePlot {
     fn plot(&self, ui: &mut egui::Ui, storage: &mut PlotPointStorage) {
         let plot = egui_plot::Plot::new("plot")
             .link_axis(Id::new(&self.active_time_axis), true, false)
-            .link_cursor(Id::new(&self.active_time_axis), true, false)
+            .link_cursor(Id::new("cursor"), true, false)
             .allow_double_click_reset(false)
             .x_axis_formatter(Self::x_label)
             .label_formatter(Self::format_label);
