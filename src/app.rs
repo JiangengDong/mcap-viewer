@@ -116,6 +116,7 @@ impl McapViewer {
             ui.label("Layout: ");
             ComboBox::from_id_source("Layout")
                 .selected_text(&self.active_layout_name)
+                .wrap(false)
                 .show_ui(ui, |ui, close| {
                     let mut removed_layouts = Vec::new();
                     for layout in self.layouts.keys() {
@@ -145,7 +146,8 @@ impl McapViewer {
                         let copy_button = ui
                             .add(IconButton::Copy)
                             .on_hover_text("Copy from current layout");
-                        let text_response = MemorizeTextEdit::show(ui);
+                        let text_response =
+                            MemorizeTextEdit::new().hint("New layout name").show(ui);
                         if text_response.text.is_empty() {
                             return;
                         }

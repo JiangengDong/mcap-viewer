@@ -5,6 +5,7 @@ pub enum IconButton {
     Close,
     Copy,
     Paste,
+    Plot,
 }
 
 impl IconButton {
@@ -14,6 +15,7 @@ impl IconButton {
             Self::Close => egui::include_image!("../../assets/light/close.png"),
             Self::Copy => egui::include_image!("../../assets/light/copy.png"),
             Self::Paste => egui::include_image!("../../assets/light/paste.png"),
+            Self::Plot => egui::include_image!("../../assets/light/plot.png"),
         }
     }
 
@@ -23,6 +25,14 @@ impl IconButton {
             Self::Close => egui::include_image!("../../assets/dark/close.png"),
             Self::Copy => egui::include_image!("../../assets/dark/copy.png"),
             Self::Paste => egui::include_image!("../../assets/dark/paste.png"),
+            Self::Plot => egui::include_image!("../../assets/dark/plot.png"),
+        }
+    }
+
+    pub fn selected(self, selected: bool) -> Selected {
+        Selected {
+            icon_button: self,
+            selected,
         }
     }
 }
@@ -33,6 +43,21 @@ impl Widget for IconButton {
             ui.add(egui::Button::image(self.dark_image()))
         } else {
             ui.add(egui::Button::image(self.light_image()))
+        }
+    }
+}
+
+pub struct Selected {
+    icon_button: IconButton,
+    selected: bool,
+}
+
+impl Widget for Selected {
+    fn ui(self, ui: &mut egui::Ui) -> egui::Response {
+        if ui.style().visuals.dark_mode {
+            ui.add(egui::Button::image(self.icon_button.dark_image()).selected(self.selected))
+        } else {
+            ui.add(egui::Button::image(self.icon_button.light_image()).selected(self.selected))
         }
     }
 }

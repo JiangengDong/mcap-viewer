@@ -37,7 +37,7 @@ impl From<LinePlotDeProxy> for LinePlot {
             title,
             active_time_axis: x_axis_name,
             curves,
-            show_settings,
+            show_curve_editor: show_settings,
             legend_corner: None,
         }
     }
@@ -48,7 +48,7 @@ impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
         let LinePlot {
             title,
             curves,
-            show_settings,
+            show_curve_editor: show_settings,
             active_time_axis: x_axis_name,
             ..
         } = value;

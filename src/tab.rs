@@ -7,7 +7,7 @@ use mcap_viewer_storage::DataStorage;
 
 use crate::{
     cache::{Key, PlotPointStorage},
-    widgets::{ComboBox, IconButton, MemorizeTextEdit},
+    widgets::{IconButton, MemorizeTextEdit},
 };
 
 mod line_plot_serde;
@@ -28,7 +28,7 @@ pub struct LinePlot {
     pub title: String,
     pub active_time_axis: String,
     pub curves: Vec<Curve>,
-    pub show_settings: bool,
+    pub show_curve_editor: bool,
     pub legend_corner: Option<Corner>,
 }
 
@@ -50,73 +50,77 @@ impl LinePlot {
     }
 
     fn ui(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
-        if self.show_settings {
-            self.menu(ui, viewer);
+        if self.show_curve_editor {
+            self.curve_editor(ui, viewer.storage.inner());
         }
         self.plot(ui, viewer.storage);
     }
 
-    fn menu(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
-        ui.collapsing("Settings", |ui| {
-            ui.horizontal(|ui| {
-                ui.label("Title");
-                ui.text_edit_singleline(&mut self.title);
-                self.settings_copy_paste_buttons(ui);
-            });
-
-            self.time_axis_selector(ui, viewer);
-
-            self.curve_editor(ui, viewer.storage.inner());
-
-            self.legend_settings(ui);
+    fn context_menu(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
+        ui.horizontal(|ui| {
+            if self.settings_copy_paste_buttons(ui).clicked() {
+                ui.close_menu();
+            }
+            if self.show_curve_editor_button(ui).clicked() {
+                ui.close_menu();
+            }
         });
+
+        ui.horizontal(|ui| {
+            ui.label("Title");
+            ui.text_edit_singleline(&mut self.title);
+        });
+        ui.menu_button("Time axis group", |ui| self.time_axis_selector(ui, viewer));
+        ui.menu_button("Legend", |ui| self.legend_settings(ui));
+    }
+
+    fn show_curve_editor_button(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        let hover_text = if self.show_curve_editor {
+            "Hide curve editor"
+        } else {
+            "show curve editor"
+        };
+        let button = ui
+            .add(IconButton::Plot.selected(self.show_curve_editor))
+            .on_hover_text(hover_text);
+        if button.clicked() {
+            self.show_curve_editor = !self.show_curve_editor;
+        }
+        button
     }
 
     fn time_axis_selector(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
-        ui.horizontal(|ui| {
-            ui.label("Time axis group: ");
-            ComboBox::from_id_source("Time axis group")
-                .selected_text(&self.active_time_axis)
-                .show_ui(ui, |ui, close| {
-                    let mut removed_time_axis = Vec::new();
-                    for time_axis in viewer.time_axis_set.iter() {
-                        ui.horizontal(|ui| {
-                            if ui
-                                .add(IconButton::Close)
-                                .on_hover_text("Remove time axis group")
-                                .clicked()
-                            {
-                                removed_time_axis.push(time_axis.clone());
-                                *close = true;
-                            }
-                            if ui
-                                .selectable_label(self.active_time_axis == *time_axis, time_axis)
-                                .clicked()
-                            {
-                                self.active_time_axis = time_axis.clone();
-                                *close = true;
-                            }
-                        });
-                    }
-                    for time_axis in removed_time_axis {
-                        viewer.time_axis_set.remove(&time_axis);
-                    }
+        let mut removed_time_axis = Vec::new();
+        for time_axis in viewer.time_axis_set.iter() {
+            ui.horizontal(|ui| {
+                if ui
+                    .add(IconButton::Close)
+                    .on_hover_text("Remove time axis group")
+                    .clicked()
+                {
+                    removed_time_axis.push(time_axis.clone());
+                }
+                if ui
+                    .selectable_label(self.active_time_axis == *time_axis, time_axis)
+                    .clicked()
+                {
+                    self.active_time_axis = time_axis.clone();
+                }
+            });
+        }
+        for time_axis in removed_time_axis {
+            viewer.time_axis_set.remove(&time_axis);
+        }
 
-                    ui.horizontal(|ui| {
-                        let text_response = MemorizeTextEdit::show(ui);
-                        if text_response.text.is_empty() {
-                            return;
-                        }
-                        let new_time_axis = text_response.text;
+        let text_response = MemorizeTextEdit::new().hint("New time axis group").show(ui);
+        if !text_response.text.is_empty() {
+            let new_time_axis = text_response.text;
 
-                        if text_response.confirmed {
-                            viewer.time_axis_set.insert(new_time_axis.clone());
-                            self.active_time_axis = new_time_axis;
-                            *close = true;
-                        }
-                    });
-                });
-        });
+            if text_response.confirmed {
+                viewer.time_axis_set.insert(new_time_axis.clone());
+                self.active_time_axis = new_time_axis;
+            }
+        }
 
         // ensure there is at least one time axis
         if viewer.time_axis_set.is_empty() {
@@ -191,56 +195,48 @@ impl LinePlot {
         }
     }
 
-    fn legend_settings(&mut self, ui: &mut egui::Ui) -> egui::InnerResponse<()> {
-        ui.horizontal(|ui| {
-            ui.label("Legend position");
-            ui.selectable_value(
-                &mut self.legend_corner,
-                Some(Corner::LeftBottom),
-                "left bottom",
-            );
-            ui.selectable_value(&mut self.legend_corner, Some(Corner::LeftTop), "left top");
-            ui.selectable_value(
-                &mut self.legend_corner,
-                Some(Corner::RightBottom),
-                "right bottom",
-            );
-            ui.selectable_value(&mut self.legend_corner, Some(Corner::RightTop), "right top");
-            ui.selectable_value(&mut self.legend_corner, None, "none");
-        })
+    fn legend_settings(&mut self, ui: &mut egui::Ui) {
+        ui.selectable_value(
+            &mut self.legend_corner,
+            Some(Corner::LeftBottom),
+            "left bottom",
+        );
+        ui.selectable_value(&mut self.legend_corner, Some(Corner::LeftTop), "left top");
+        ui.selectable_value(
+            &mut self.legend_corner,
+            Some(Corner::RightBottom),
+            "right bottom",
+        );
+        ui.selectable_value(&mut self.legend_corner, Some(Corner::RightTop), "right top");
+        ui.selectable_value(&mut self.legend_corner, None, "none");
     }
 
-    fn settings_copy_paste_buttons(&mut self, ui: &mut egui::Ui) {
-        ui.horizontal(|ui| {
-            if ui
-                .add(IconButton::Copy)
-                .on_hover_text("Copy settings")
-                .clicked()
-            {
-                let setting_string = ron::to_string(self).unwrap_or_default();
-                ui.memory_mut(|mem| {
-                    mem.data
-                        .insert_temp(Id::new("mcap-viewer-plot-settings-copy"), setting_string);
-                });
-            }
-            if ui
-                .add(IconButton::Paste)
-                .on_hover_text("Paste settings")
-                .clicked()
-            {
-                let setting_string = ui.memory(|mem| {
-                    mem.data
-                        .get_temp::<String>(Id::new("mcap-viewer-plot-settings-copy"))
-                });
-                if let Some(setting_string) = setting_string {
-                    if let Ok(settings) = ron::from_str::<Self>(&setting_string) {
-                        let old_id = self.id;
-                        *self = settings;
-                        self.id = old_id;
-                    }
+    fn settings_copy_paste_buttons(&mut self, ui: &mut egui::Ui) -> egui::Response {
+        let copy_button = ui.add(IconButton::Copy).on_hover_text("Copy tab settings");
+        if copy_button.clicked() {
+            let setting_string = ron::to_string(self).unwrap_or_default();
+            ui.memory_mut(|mem| {
+                mem.data
+                    .insert_temp(Id::new("mcap-viewer-plot-settings-copy"), setting_string);
+            });
+        }
+        let paste_button = ui
+            .add(IconButton::Paste)
+            .on_hover_text("Paste tab settings");
+        if paste_button.clicked() {
+            let setting_string = ui.memory(|mem| {
+                mem.data
+                    .get_temp::<String>(Id::new("mcap-viewer-plot-settings-copy"))
+            });
+            if let Some(setting_string) = setting_string {
+                if let Ok(settings) = ron::from_str::<Self>(&setting_string) {
+                    let old_id = self.id;
+                    *self = settings;
+                    self.id = old_id;
                 }
             }
-        });
+        }
+        copy_button.union(paste_button)
     }
 
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -375,15 +371,7 @@ impl egui_dock::TabViewer for Viewer<'_> {
         _surface: egui_dock::SurfaceIndex,
         _node: egui_dock::NodeIndex,
     ) {
-        if tab.show_settings {
-            if ui.button("hide settings").clicked() {
-                tab.show_settings = false;
-                ui.close_menu();
-            }
-        } else if ui.button("show settings").clicked() {
-            tab.show_settings = true;
-            ui.close_menu();
-        }
+        tab.context_menu(ui, self);
     }
 }
 
