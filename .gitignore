@@ -4,3 +4,4 @@
 # profile data from perf
 perf.data*
 flamegraph.svg
+*.mcap
