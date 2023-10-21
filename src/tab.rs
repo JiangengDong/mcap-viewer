@@ -70,7 +70,10 @@ impl LinePlot {
             ui.label("Title");
             ui.text_edit_singleline(&mut self.title);
         });
+
         ui.menu_button("Time axis group", |ui| self.time_axis_selector(ui, viewer));
+        self.ensure_time_axis(viewer);
+
         ui.menu_button("Legend", |ui| self.legend_settings(ui));
     }
 
@@ -90,6 +93,16 @@ impl LinePlot {
     }
 
     fn time_axis_selector(&mut self, ui: &mut egui::Ui, viewer: &mut Viewer<'_>) {
+        let text_response = MemorizeTextEdit::new().hint("New time axis group").show(ui);
+        if !text_response.text.is_empty() {
+            let new_time_axis = text_response.text;
+
+            if text_response.confirmed {
+                viewer.time_axis_set.insert(new_time_axis.clone());
+                self.active_time_axis = new_time_axis;
+            }
+        }
+
         let mut removed_time_axis = Vec::new();
         for time_axis in viewer.time_axis_set.iter() {
             ui.horizontal(|ui| {
@@ -111,17 +124,9 @@ impl LinePlot {
         for time_axis in removed_time_axis {
             viewer.time_axis_set.remove(&time_axis);
         }
+    }
 
-        let text_response = MemorizeTextEdit::new().hint("New time axis group").show(ui);
-        if !text_response.text.is_empty() {
-            let new_time_axis = text_response.text;
-
-            if text_response.confirmed {
-                viewer.time_axis_set.insert(new_time_axis.clone());
-                self.active_time_axis = new_time_axis;
-            }
-        }
-
+    fn ensure_time_axis(&mut self, viewer: &mut Viewer<'_>) {
         // ensure there is at least one time axis
         if viewer.time_axis_set.is_empty() {
             viewer.time_axis_set.insert("time".to_owned());
