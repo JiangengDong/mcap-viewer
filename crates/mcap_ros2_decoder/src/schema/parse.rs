@@ -226,7 +226,7 @@ mod tests {
     #[test]
     fn test_nested_schema() {
         let schema_name = "firmware_common/msg/DCMotorGroupCommand";
-        let schema_text = br#"
+        let schema_text = br"
 # TODO: dc motor group is almost useless, because most of the dc motors act on its own. Remove this later.
 # Commands for DC motors (controlled by a PWM signal and a direction pin)
 DCMotorCommand[1] motors
@@ -239,7 +239,7 @@ MSG: firmware_common/DCMotorCommand
 int8 vel_percent
 # The time to keep this velocity before resetting to zero. The unit is millisecond.
 uint16 timeout_ms
-        "#;
+        ";
         let mut type_table = HashMap::new();
         let result = parse(schema_name, schema_text, &mut type_table);
         let schema = result.unwrap();

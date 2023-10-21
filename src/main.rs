@@ -4,6 +4,7 @@
 use std::path::PathBuf;
 
 use clap::Parser;
+use eframe::Renderer;
 
 #[derive(clap::Parser)]
 #[command(author, version, about, long_about = None)]
@@ -19,12 +20,14 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         initial_window_size: Some([400.0, 300.0].into()),
         min_window_size: Some([300.0, 220.0].into()),
+        renderer: Renderer::Wgpu,
         ..Default::default()
     };
     eframe::run_native(
         "mcap viewer",
         native_options,
         Box::new(|cc| {
+            egui_extras::install_image_loaders(&cc.egui_ctx);
             let viewer = if let Some(path) = cli.path {
                 mcap_viewer::McapViewer::from_path(cc, path).unwrap()
             } else {

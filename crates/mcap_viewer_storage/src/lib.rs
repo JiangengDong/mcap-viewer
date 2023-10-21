@@ -46,6 +46,10 @@ impl DataStorage {
         }
     }
 
+    pub fn get_field(&self, topic: &str, field: &str) -> Option<&TimeSeries> {
+        self.0.get(topic)?.get(field)
+    }
+
     delegate::delegate!(
         to self.0 {
             pub fn get(&self, topic: &str) -> Option<&TopicStorage>;
@@ -236,11 +240,10 @@ impl TimeSeries {
     gen_time_series_method!(push_f64, as_f64, as_mut_f64, f64, F64);
 }
 
-#[cfg(feature = "egui_plot")]
-impl From<TimeSeries> for egui_plot::PlotPoints {
+impl From<TimeSeries> for Vec<[f64; 2]> {
     fn from(value: TimeSeries) -> Self {
         match value {
-            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Uninit => vec![],
             TimeSeries::Bool(v) => v
                 .into_iter()
                 .map(|(x, y)| [x as f64, y as u8 as f64])
@@ -259,11 +262,10 @@ impl From<TimeSeries> for egui_plot::PlotPoints {
     }
 }
 
-#[cfg(feature = "egui_plot")]
-impl From<&TimeSeries> for egui_plot::PlotPoints {
+impl From<&TimeSeries> for Vec<[f64; 2]> {
     fn from(value: &TimeSeries) -> Self {
         match value {
-            TimeSeries::Uninit => egui_plot::PlotPoints::Owned(vec![]),
+            TimeSeries::Uninit => vec![],
             TimeSeries::Bool(v) => v
                 .iter()
                 .map(|(x, y)| [*x as f64, *y as u8 as f64])
