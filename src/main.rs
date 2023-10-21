@@ -20,7 +20,7 @@ fn main() -> eframe::Result<()> {
     let native_options = eframe::NativeOptions {
         initial_window_size: Some([400.0, 300.0].into()),
         min_window_size: Some([300.0, 220.0].into()),
-        renderer: Renderer::Wgpu,
+        renderer: Renderer::Glow,
         ..Default::default()
     };
     eframe::run_native(
