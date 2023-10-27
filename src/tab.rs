@@ -1,6 +1,6 @@
 use std::{collections::BTreeSet, ops::RangeInclusive, sync::atomic::AtomicUsize};
 
-use egui::{epaint::Hsva, Color32, Id};
+use egui::{epaint::Hsva, Color32, Id, TextEdit};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_plot::{Corner, Legend, Line, PlotBounds, PlotPoint, PlotPoints, Points};
 use mcap_viewer_storage::DataStorage;
@@ -17,6 +17,7 @@ static TAB_MONOTONIC_ID: AtomicUsize = AtomicUsize::new(0);
 #[derive(serde::Deserialize, serde::Serialize, Clone, Default)]
 #[serde(default)]
 pub struct Curve {
+    pub name: String,
     pub topic: String,
     pub field: String,
     pub color: Color32,
@@ -150,29 +151,6 @@ impl LinePlot {
                 {
                     keep[i] = false;
                 }
-
-                ui.color_edit_button_srgba(&mut curve.color);
-
-                let all_topics = storage.keys();
-                ui.add(
-                    AutoCompleteTextEdit::new(&mut curve.topic, all_topics)
-                        .max_suggestions(10)
-                        .highlight_matches(true)
-                        .set_text_edit_properties(|text| text.clip_text(false).hint_text("topic")),
-                );
-
-                if let Some(selected_topic) = storage.get(&curve.topic) {
-                    let all_fields = selected_topic.keys();
-                    ui.add(
-                        AutoCompleteTextEdit::new(&mut curve.field, all_fields)
-                            .max_suggestions(10)
-                            .highlight_matches(true)
-                            .set_text_edit_properties(|text| {
-                                text.clip_text(false).hint_text("field")
-                            }),
-                    );
-                }
-
                 if ui.add(IconButton::Add).on_hover_text("Add curve").clicked() {
                     insert.push((i, false));
                 }
@@ -182,6 +160,36 @@ impl LinePlot {
                     .clicked()
                 {
                     insert.push((i, true));
+                }
+
+                ui.color_edit_button_srgba(&mut curve.color);
+
+                let curve_name_edit = TextEdit::singleline(&mut curve.name)
+                    .desired_width(60.0)
+                    .clip_text(false)
+                    .hint_text("name");
+                ui.add(curve_name_edit);
+
+                let all_topics = storage.keys();
+                ui.add(
+                    AutoCompleteTextEdit::new(&mut curve.topic, all_topics)
+                        .max_suggestions(10)
+                        .highlight_matches(true)
+                        .set_text_edit_properties(|text| {
+                            text.desired_width(75.0).clip_text(false).hint_text("topic")
+                        }),
+                );
+
+                if let Some(selected_topic) = storage.get(&curve.topic) {
+                    let all_fields = selected_topic.keys();
+                    ui.add(
+                        AutoCompleteTextEdit::new(&mut curve.field, all_fields)
+                            .max_suggestions(10)
+                            .highlight_matches(true)
+                            .set_text_edit_properties(|text| {
+                                text.desired_width(75.0).clip_text(false).hint_text("field")
+                            }),
+                    );
                 }
             });
         }
@@ -281,7 +289,11 @@ impl LinePlot {
                 };
                 let points = storage.get(&key);
 
-                let name = curve.topic.clone() + &curve.field;
+                let name = if curve.name.is_empty() {
+                    curve.topic.clone() + &curve.field
+                } else {
+                    curve.name.clone()
+                };
                 let color = if curve.color == Color32::TRANSPARENT {
                     Self::auto_color(&mut next_auto_color_idx)
                 } else {

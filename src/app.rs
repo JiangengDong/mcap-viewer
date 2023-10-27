@@ -146,8 +146,10 @@ impl McapViewer {
                         let copy_button = ui
                             .add(IconButton::Copy)
                             .on_hover_text("Copy from current layout");
-                        let text_response =
-                            MemorizeTextEdit::new().hint("New layout name").show(ui);
+                        let text_response = MemorizeTextEdit::new()
+                            .hint("New layout name")
+                            .id("New layout name")
+                            .show(ui);
                         if text_response.text.is_empty() {
                             return;
                         }
@@ -169,6 +171,10 @@ impl McapViewer {
                                 .entry(new_layout_name.clone())
                                 .or_insert_with(|| layout);
                             self.active_layout_name = new_layout_name;
+                            ui.memory_mut(|mem| {
+                                mem.data
+                                    .insert_temp(egui::Id::new("New layout name"), String::new())
+                            });
                             *close = true;
                         }
                     });

@@ -2,6 +2,7 @@ use egui::TextEdit;
 
 pub struct MemorizeTextEdit<'a> {
     pub hint: Option<&'a str>,
+    pub id_source: Option<egui::Id>,
 }
 
 pub struct Response {
@@ -12,7 +13,20 @@ pub struct Response {
 
 impl<'a> MemorizeTextEdit<'a> {
     pub fn new() -> Self {
-        Self { hint: None }
+        Self {
+            hint: None,
+            id_source: None,
+        }
+    }
+
+    pub fn id<S>(self, id_source: &S) -> Self
+    where
+        S: std::hash::Hash + ?Sized,
+    {
+        Self {
+            hint: self.hint,
+            id_source: Some(egui::Id::new(id_source)),
+        }
     }
 
     #[allow(clippy::unused_self)]
@@ -23,11 +37,12 @@ impl<'a> MemorizeTextEdit<'a> {
     {
         MemorizeTextEdit {
             hint: Some(hint.as_ref()),
+            id_source: self.id_source,
         }
     }
 
     pub fn show(self, ui: &mut egui::Ui) -> Response {
-        let id = ui.next_auto_id();
+        let id = self.id_source.unwrap_or_else(|| ui.next_auto_id());
 
         let mut new_text = ui
             .memory(|mem| mem.data.get_temp::<String>(id))
