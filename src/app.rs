@@ -117,6 +117,7 @@ impl McapViewer {
             ComboBox::from_id_source("Layout")
                 .selected_text(&self.active_layout_name)
                 .wrap(false)
+                .width(150.0)
                 .show_ui(ui, |ui, close| {
                     let mut removed_layouts = Vec::new();
                     for layout in self.layouts.keys() {

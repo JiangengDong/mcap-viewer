@@ -176,7 +176,9 @@ impl LinePlot {
                         .max_suggestions(10)
                         .highlight_matches(true)
                         .set_text_edit_properties(|text| {
-                            text.desired_width(75.0).clip_text(false).hint_text("topic")
+                            text.desired_width(300.0)
+                                .clip_text(false)
+                                .hint_text("topic")
                         }),
                 );
 
@@ -187,7 +189,9 @@ impl LinePlot {
                             .max_suggestions(10)
                             .highlight_matches(true)
                             .set_text_edit_properties(|text| {
-                                text.desired_width(75.0).clip_text(false).hint_text("field")
+                                text.desired_width(300.0)
+                                    .clip_text(false)
+                                    .hint_text("field")
                             }),
                     );
                 }
@@ -324,6 +328,23 @@ impl LinePlot {
                 });
             }
         }
+
+        let range = [max[0] - min[0], max[1] - min[1]];
+        if range[0] == 0.0 {
+            min[0] -= 1.0;
+            max[0] += 1.0;
+        } else {
+            min[0] -= range[0] * 0.05;
+            max[0] += range[0] * 0.05;
+        }
+        if range[1] == 0.0 {
+            min[1] -= 1.0;
+            max[1] += 1.0;
+        } else {
+            min[1] -= range[1] * 0.05;
+            max[1] += range[1] * 0.05;
+        }
+
         PlotBounds::from_min_max(min, max)
     }
 
@@ -342,12 +363,17 @@ impl LinePlot {
     }
 
     #[allow(clippy::cast_possible_truncation)]
-    fn format_label(_series_name: &str, point: &PlotPoint) -> String {
+    fn format_label(series_name: &str, point: &PlotPoint) -> String {
+        let series_name = if series_name.is_empty() {
+            "y"
+        } else {
+            series_name
+        };
         let timestamp = (point.x / 1000.0) as i64;
         if let Some(timestamp) = chrono::NaiveDateTime::from_timestamp_micros(timestamp) {
-            format!("x:{}\ny:{}", timestamp, point.y)
+            format!("time: {}\n{}: {}", timestamp, series_name, point.y)
         } else {
-            format!("x:{}\ny:{}", point.x, point.y)
+            format!("x: {}\n{}: {}", point.x, series_name, point.y)
         }
     }
 }
