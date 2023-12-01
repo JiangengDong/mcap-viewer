@@ -21,7 +21,7 @@ enum FileOperation {
 #[derive(serde::Deserialize, serde::Serialize)]
 #[serde(default)] // if we add new fields, give them default values when deserializing old state
 pub struct McapViewer {
-    #[serde(skip)] // This how you opt-out of serialization of a field
+    #[serde(skip)]
     storage: PlotPointStorage,
     #[serde(skip)]
     file_operation: FileOperation,
@@ -173,12 +173,37 @@ impl McapViewer {
                             self.active_layout_name = new_layout_name;
                             ui.memory_mut(|mem| {
                                 mem.data
-                                    .insert_temp(egui::Id::new("New layout name"), String::new())
+                                    .insert_temp(egui::Id::new("New layout name"), String::new());
                             });
                             *close = true;
                         }
                     });
                 });
+            if ui.button("Load layouts").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("ron", &["ron"])
+                    .pick_file()
+                {
+                    if let Ok(app) = std::fs::read_to_string(path) {
+                        if let Ok(app) = ron::from_str::<Self>(&app) {
+                            *self = app;
+                        }
+                    }
+                }
+            }
+            if ui.button("Save layouts").clicked() {
+                if let Some(path) = rfd::FileDialog::new()
+                    .add_filter("ron", &["ron"])
+                    .save_file()
+                {
+                    let path = path.with_extension("ron");
+                    if let Ok(app) = ron::to_string(self) {
+                        if let Err(err) = std::fs::write(path, app) {
+                            log::error!("Failed to save layouts: {}", err);
+                        }
+                    }
+                }
+            }
         });
 
         // ensure there is at least one layout

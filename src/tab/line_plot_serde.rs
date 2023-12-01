@@ -6,6 +6,36 @@ use super::LinePlot;
 
 use super::Curve;
 
+#[derive(serde::Serialize, serde::Deserialize, Copy, Clone)]
+enum Corner {
+    LeftTop,
+    RightTop,
+    LeftBottom,
+    RightBottom,
+}
+
+impl From<Corner> for egui_plot::Corner {
+    fn from(value: Corner) -> Self {
+        match value {
+            Corner::LeftTop => Self::LeftTop,
+            Corner::RightTop => Self::RightTop,
+            Corner::LeftBottom => Self::LeftBottom,
+            Corner::RightBottom => Self::RightBottom,
+        }
+    }
+}
+
+impl From<egui_plot::Corner> for Corner {
+    fn from(value: egui_plot::Corner) -> Self {
+        match value {
+            egui_plot::Corner::LeftTop => Self::LeftTop,
+            egui_plot::Corner::RightTop => Self::RightTop,
+            egui_plot::Corner::LeftBottom => Self::LeftBottom,
+            egui_plot::Corner::RightBottom => Self::RightBottom,
+        }
+    }
+}
+
 #[derive(serde::Deserialize, Default)]
 #[serde(default)]
 struct LinePlotDeProxy {
@@ -13,6 +43,7 @@ struct LinePlotDeProxy {
     curves: Vec<Curve>,
     show_settings: bool,
     x_axis_name: String,
+    legend_corner: Option<Corner>,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -22,6 +53,7 @@ struct LinePlotSerProxy<'a> {
     curves: &'a [Curve],
     show_settings: bool,
     x_axis_name: &'a str,
+    legend_corner: Option<Corner>,
 }
 
 impl From<LinePlotDeProxy> for LinePlot {
@@ -31,6 +63,7 @@ impl From<LinePlotDeProxy> for LinePlot {
             curves,
             show_settings,
             x_axis_name,
+            legend_corner,
         } = value;
         Self {
             id: TAB_MONOTONIC_ID.fetch_add(1, Ordering::Relaxed),
@@ -38,7 +71,7 @@ impl From<LinePlotDeProxy> for LinePlot {
             active_time_axis: x_axis_name,
             curves,
             show_curve_editor: show_settings,
-            legend_corner: None,
+            legend_corner: legend_corner.map(Into::into),
         }
     }
 }
@@ -50,6 +83,7 @@ impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
             curves,
             show_curve_editor: show_settings,
             active_time_axis: x_axis_name,
+            legend_corner,
             ..
         } = value;
         Self {
@@ -57,6 +91,7 @@ impl<'a> From<&'a LinePlot> for LinePlotSerProxy<'a> {
             curves,
             x_axis_name,
             show_settings: *show_settings,
+            legend_corner: legend_corner.map(Into::into),
         }
     }
 }

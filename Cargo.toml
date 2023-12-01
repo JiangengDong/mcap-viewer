@@ -14,19 +14,19 @@ members = [
 ]
 
 [dependencies]
-egui = "0.23.0"
-eframe = { version = "0.23.0", default-features = false, features = [
+egui = "0.24.1"
+eframe = { version = "0.24.1", default-features = false, features = [
     "default_fonts", # Embed the default egui fonts.
     "glow",          # Use the glow rendering backend. Alternative: "wgpu".
     "persistence",   # Enable restoring app state when restarting the app.
 ] }
-egui_plot = "0.23.0"
-egui_dock = { version = "0.8.1", features = ["serde"] }
-egui_autocomplete = { version = "2.0.0", features = ["serde"] }
+egui_plot = "0.24.1"
+egui_dock = { version = "0.9.0", features = ["serde"] }
+egui_autocomplete = { version = "3.0.0", features = ["serde"] }
 
 # You only need serde if you want app persistence:
 serde = { version = "1", features = ["derive"] }
-egui_extras = { version = "0.23.0", features = ["all_loaders"] }
+egui_extras = { version = "0.24.1", features = ["all_loaders"] }
 
 # third-party dependencies:
 log = "0.4"
@@ -45,6 +45,7 @@ rayon = "1.8.0"
 ron = "0.8.1"
 nohash-hasher = "0.2.0"
 downsample_rs = { git = "https://github.com/predict-idlab/tsdownsample.git", version = "0.1.0" }
+rfd = "0.12.1"
 
 [profile.release]
 opt-level = 3

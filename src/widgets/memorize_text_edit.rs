@@ -6,7 +6,7 @@ pub struct MemorizeTextEdit<'a> {
 }
 
 pub struct Response {
-    pub response: egui::Response,
+    pub inner: egui::Response,
     pub text: String,
     pub confirmed: bool,
 }
@@ -65,7 +65,7 @@ impl<'a> MemorizeTextEdit<'a> {
         }
 
         Response {
-            response,
+            inner: response,
             text: new_text,
             confirmed,
         }
