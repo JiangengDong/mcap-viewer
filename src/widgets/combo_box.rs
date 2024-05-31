@@ -324,7 +324,8 @@ fn combo_box_dyn<R>(
             }
 
             let text_rect = Align2::LEFT_CENTER.align_size_within_rect(galley.size(), rect);
-            galley.paint_with_visuals(ui.painter(), text_rect.min, visuals);
+            ui.painter()
+                .galley(text_rect.min, galley, visuals.text_color());
         }
     });
 

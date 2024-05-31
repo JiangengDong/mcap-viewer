@@ -294,7 +294,7 @@ impl eframe::App for McapViewer {
 }
 
 fn powered_by_egui_and_eframe_overlay(ctx: &egui::Context) {
-    egui::Area::new("power by")
+    egui::Area::new("power by".into())
         .pivot(Align2::RIGHT_BOTTOM)
         .anchor(Align2::RIGHT_BOTTOM, [0.0, 0.0])
         .movable(false)

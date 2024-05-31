@@ -4,6 +4,7 @@ use egui::{epaint::Hsva, Color32, Id, TextEdit};
 use egui_autocomplete::AutoCompleteTextEdit;
 use egui_plot::{Corner, Legend, Line, PlotBounds, PlotPoint, PlotPoints, Points};
 use mcap_viewer_storage::DataStorage;
+use egui_plot::GridMark;
 
 use crate::{
     cache::{Key, PlotPointStorage},
@@ -353,9 +354,9 @@ impl LinePlot {
         clippy::cast_precision_loss,
         clippy::needless_pass_by_value
     )]
-    fn x_label(value: f64, _limit: usize, _range: &RangeInclusive<f64>) -> String {
-        let timestamp = (value / 1000.0) as i64;
-        if let Some(timestamp) = chrono::NaiveDateTime::from_timestamp_micros(timestamp) {
+    fn x_label(grid_mark: GridMark, _limit: usize, _range: &RangeInclusive<f64>) -> String {
+        let timestamp = (grid_mark.value / 1000.0) as i64;
+        if let Some(timestamp) = chrono::DateTime::from_timestamp_micros(timestamp) {
             timestamp.to_string()
         } else {
             timestamp.to_string()
@@ -370,7 +371,7 @@ impl LinePlot {
             series_name
         };
         let timestamp = (point.x / 1000.0) as i64;
-        if let Some(timestamp) = chrono::NaiveDateTime::from_timestamp_micros(timestamp) {
+        if let Some(timestamp) = chrono::DateTime::from_timestamp_micros(timestamp) {
             format!("time: {}\n{}: {}", timestamp, series_name, point.y)
         } else {
             format!("x: {}\n{}: {}", point.x, series_name, point.y)
