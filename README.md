@@ -1,4 +1,22 @@
-# eframe template
+# MCap Viewer
+
+This is a tool for visualizing ROS2 message stored in mcap files as curves. 
+
+## TODOs
+
+- [ ] Cleanup the code
+- [ ] Update to latest egui and eframe
+- [ ] Extract the parsing code into a separate repo
+- [ ] Represent the parsed data in Arrow
+- [ ] Accelerate parsing with JIT
+
+## Acknowledgement
+
+This software was originally developed during my tenure at [Nimble Robotics](https://www.nimble.ai/) as a tool to facilitate debugging. Upon my departure, the company graciously granted permission for me to treat it as a personal project and to release it as open source.
+
+(Below are template READMEs that I haven't found time to cleanup yet)
+
+-----
 
 [![dependency status](https://deps.rs/repo/github/emilk/eframe_template/status.svg)](https://deps.rs/repo/github/emilk/eframe_template)
 [![Build Status](https://github.com/emilk/eframe_template/workflows/CI/badge.svg)](https://github.com/emilk/eframe_template/actions?workflow=CI)
